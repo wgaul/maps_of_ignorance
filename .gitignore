@@ -45,7 +45,12 @@ Thumbs.db
 *.RData
 *.Rdata
 *.rds
+*.tif
+*.Rproj
+*.grd
+*.gri
 *.nb.html
 *cache
 unknown_bird_dataset_examples.csv
 
+.Rproj.user
