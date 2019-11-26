@@ -68,6 +68,17 @@ hec_names_spat <- spTransform(hec_names_spat, raster::projection(pred_brick))
 ### end prepare predictor variables -------------------------------------------
 
 ### prepare millipede data ----------------------------------------------------
+## make checlist ID variable
+mill$checklist_ID <- paste0(mill$RecorderHash, mill$StartDate, mill$EndDate, 
+                            mill$SiteName, mill$Latitude, mill$Longitude)
+## calculate list lengths for each checklist
+mill$list_length <- NA
+for(i in 1:length(unique(mill$checklist_ID))) {
+  id <- unique(mill$checklist_ID)[i]
+  ll <- length(which(mill$checklist_ID == id))
+  mill$list_length[mill$checklist_ID == id] <- ll
+}
+
 ## make Julian day and year variables
 mill$year <- year(mill$StartDate)
 mill$day_of_year <- yday(mill$StartDate)
@@ -99,7 +110,7 @@ mill$northings_csc <- mill$northings_csc/spat_sd
 
 mill$year_csc <- mill$year - mean(mill$year)
 mill$year_csc <- mill$year_csc/sd(mill$year_csc)
-mill$doy_csc <- mill$day_of_year - mean(mill$day_of_year)
+mill$doy_csc <- mill$day_of_year - 182.5 # center day of year
 mill$doy_csc <- mill$doy_csc/sd(mill$doy_csc)
 
 # I think 10 km in space is about as big as a year and as big as about 8 julian
