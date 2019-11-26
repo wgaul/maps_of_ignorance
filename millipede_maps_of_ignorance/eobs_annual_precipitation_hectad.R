@@ -167,7 +167,7 @@ if(print_plots) {
 }
 
 krig_mean_rr_map <- raster::brick(krg_mean_rr_predict)
-krig_mean_rr_map <- raster::mask(krig_mean_rr_map, ir_TM75) 
+# krig_mean_rr_map <- raster::mask(krig_mean_rr_map, ir_TM75) 
 names(krig_mean_rr_map) <- c("mean_annual_rr", "variance")
 if(print_plots) {
   plot(krig_mean_rr_map, main = "Average annual rr")

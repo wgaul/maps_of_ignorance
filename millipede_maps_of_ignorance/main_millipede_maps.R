@@ -10,7 +10,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 29 Oct 2019
+## last modified: 26 Nov 2019
 #################################
 dbg <- F
 
@@ -102,7 +102,8 @@ ggplot() +
 ## make query points ---------------------------------------------------------
 query_points <- cbind(hec_names,  
                       data.frame(raster::extract(pred_brick, hec_names_spat, 
-                                                 df = TRUE)))
+                                                 df = TRUE, 
+                                                 method = "bilinear")))
 query_points$year_csc <- mill$year_csc[mill$year == max(mill$year)][1]
 query_points$eastings_csc <- query_points$eastings - east_mean # centre
 query_points$eastings_csc <- query_points$eastings_csc/spat_sd # scale

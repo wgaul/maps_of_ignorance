@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 25 Oct 2019
+## last modified: 26 Nov 2019
 ##############################
 
 ### load millipede data
@@ -55,7 +55,7 @@ pred_brick <- brick(list(
   coast_dist = resample(coast_dist_hec_rast, krg_mean_rr_rast), 
   elev = resample(elev, krg_mean_rr_rast)))
 # mask pred brick by one of the CORINE layers to get only Irish land cells
-pred_brick <- mask(pred_brick, pred_brick$artificial_surfaces)
+# pred_brick <- mask(pred_brick, pred_brick$artificial_surfaces)
 # scale and centre environmental predictors over study extent
 pred_brick <- scale(pred_brick)
 

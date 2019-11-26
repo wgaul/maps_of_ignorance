@@ -4,7 +4,7 @@
 ## author: Willson Gaul wgaul@hotmail.com (based on a script by Hannah White
 ##          vasc_fres_all.R shared with wg via GitHub in April 2018)
 ## created: 2 May 2018 
-## last modified: 25 Oct 2019 - change directory to millipede maps of ignorance project
+## last modified: 26 Nov 2019 - change directory to millipede maps of ignorance project
 ####################################
 
 corine <- raster("./data/CORINE_IE.grd")
@@ -54,9 +54,14 @@ for (i in 1:nrow(hecs)) {
   clc_l1_counts_hecs[i, ] <- sapply(colnames(clc_l1_counts_hecs), 
                                  FUN = function(x) {
                                    sum(x == corine_sub$LABEL1)})
-  # calculate proportions of corine LABEL1 classes
-  clc_l1_props_hecs[i, ] <- clc_l1_counts_hecs[i, ] / sum(
-    clc_l1_counts_hecs[i, ])
+  # calculate proportions of corine LABEL1 classes (if no land cover classes in
+  # this grid cell, then set all proportions to zero)
+  if(sum(clc_l1_counts_hecs[i, ]) == 0) {
+    clc_l1_props_hecs[i, ] <- 0} else {
+      clc_l1_props_hecs[i, ] <- clc_l1_counts_hecs[i, ] / sum(
+        clc_l1_counts_hecs[i, ])
+    }
+
   
   ## LABEL2 classes
   # count number of corine LABEL2 classes within this hectad
@@ -64,8 +69,13 @@ for (i in 1:nrow(hecs)) {
                                     FUN = function(x) {sum(
                                       x == corine_sub$LABEL2)})
   # calculate proportions of corine LABEL1 classes
-  clc_l2_props_hecs[i, ] <- clc_l2_counts_hecs[i, ] / sum(
-    clc_l2_counts_hecs[i, ])
+  if(sum(clc_l2_counts_hecs[i, ]) == 0) {
+    clc_l2_props_hecs[i, ] <- 0 
+  } else {
+    clc_l2_props_hecs[i, ] <- clc_l2_counts_hecs[i, ] / sum(
+      clc_l2_counts_hecs[i, ])
+  }
+
 }
 
 clc_l1_counts_hecs <- cbind(hecs, clc_l1_counts_hecs)
