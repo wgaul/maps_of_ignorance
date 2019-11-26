@@ -5,7 +5,6 @@
 ##  - put all environmental data in this project directory
 ##  - add soil data
 ##  - add geology data
-##  - get all hectads in CORINE
 ##  
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
@@ -239,7 +238,7 @@ make_plot <- function(test_dates, mill, query_points) {
   mill$day_lag_csc <- mill$day_lag_csc - 90 # roughly centre day lag
   mill$day_lag_csc <- mill$day_lag_csc/sd(-90:90) # scale by the same amount every time
   
-  dist_sp_doy <- dist_to_nearest_record(mill[1:2000, ], 
+  dist_sp_doy <- dist_to_nearest_record(mill, 
                                         query_points = query_points, 
                                         coords = c("eastings_csc", 
                                                    "northings_csc", 
@@ -252,8 +251,8 @@ make_plot <- function(test_dates, mill, query_points) {
     ggtitle(paste0("spatial/seasonal distance at doy ", test_dates))
 }
 
+warning("Spatial/temporal distances will take a long time to calculate.")
 dist_by_month_plots <- lapply(test_dates, FUN = make_plot, 
                               mill = mill, query_points = query_points)
-
 
 multiplot(plotlist = dist_by_month_plots, cols = 3)
