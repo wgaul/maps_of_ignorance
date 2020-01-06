@@ -48,6 +48,9 @@ ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_hec_raster) <- 10000
+irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_1km_raster) <- 1000
 ### --------------------- end hectad raster -----------------------------------
 
 ## calculate 2nd quantile of minimum daily temp for each year -----------------
@@ -113,6 +116,7 @@ dimnames(spat_mean_tn@coords)[[2]][which(
 # Interpolate data in spat_min_temp and spat_allyear_min_tempto the raster 
 # grid irish_hec_raster
 irish_spat_grid <- as(irish_hec_raster, 'SpatialGrid')
+irish_spat_grid_1km <- as(irish_1km_raster, 'SpatialGrid')
 
 ## mean min (2nd quantile) winter temp over all years
 # create empirical variogram for mean min winter temp
@@ -136,9 +140,12 @@ krg_mean_tn <- gstat(formula = mean_annual_min_winter_tmp~1,
 
 krg_mean_tn_predict <- predict(krg_mean_tn, irish_spat_grid)
 names(krg_mean_tn_predict) <- c("mean_winter_tn", "variance")
+krg_mean_tn_predict_1km <- predict(krg_mean_tn, irish_spat_grid_1km)
+names(krg_mean_tn_predict_1km) <- c("mean_winter_tn", "variance")
 
 # make rasters
 krg_mean_tn_rast <- raster::raster(krg_mean_tn_predict)
+krg_mean_tn_rast_1km <- raster::raster(krg_mean_tn_predict_1km)
 
 # masking with shapefile, but I think the shapefile cuts off some hectads that
 # do have data (some sp. datasets have 1014 hectads)
@@ -153,5 +160,5 @@ if(print_plots) {
 }
 
 ### save outputs ---------------------------------------------------------------
-save(krg_mean_tn_predict, krg_mean_tn_rast, krig_mean_tn_map, 
-     file = "winter_tn_hectad.RData")
+saveRDS(krg_mean_tn_rast, file = "winter_tn_hectad.rds")
+saveRDS(krg_mean_tn_rast_1km, file = "winter_tn_1km.rds")

@@ -231,12 +231,12 @@ make_plot <- function(test_dates, mill, query_points) {
                                         chunk.size = 334) #1621
   ggplot(data = dist_sp_doy, aes(x = eastings, y = northings)) + 
     geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
-    scale_color_gradient(limits = c(0, 1), name = "Distance\nto nearest\nrecord") + 
+    scale_color_gradient(name = "Distance\nto nearest\nrecord") + 
     ggtitle(paste0("spatial/seasonal distance at doy ", test_dates))
 }
 
 warning("Spatial/temporal distances will take a long time to calculate.")
 dist_by_month_plots <- lapply(test_dates, FUN = make_plot, 
-                              mill = mill, query_points = query_points)
+                              mill = mill[tp, ], query_points = query_points)
 
 multiplot(plotlist = dist_by_month_plots, cols = 3)

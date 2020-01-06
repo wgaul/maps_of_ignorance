@@ -11,6 +11,7 @@
 ## created: 24 Nov 2017
 ## last modified: 10 May 2019 changed location of grid 
 ##      25 Oct 2019 - changed directory to millipede map of ignorance project
+##      6 Jan 2020 - make a 1km raster also
 ################################
 
 print_plots <- F
@@ -21,10 +22,13 @@ ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 rm(ir)
 
 ## ----------------- prepare hectad raster -----------------------------------
-# load one of the eobs rasters to use as a template for interpolating elevation
-load("./annual_precip_hectad.RData")
-# rename the eobs raster to a general template name
-irish_hec_raster <- krg_mean_rr_rast 
+# make 10km square template raster
+irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_hec_raster) <- 10000
+irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_1km_raster) <- 1000
 
 ## load elevation data
 d  <- raster('./data/ETOPO1_Ice_g_gmt4.grd')
@@ -43,7 +47,6 @@ if(print_plots) {
 
 # interpolate
 # I want to interpolate data in orig_elev to the raster grid irish_hec_raster
-irish_spat_grid <- as(irish_hec_raster, 'SpatialGrid')
 
 # create empirical variogram for elevation
 elev_spatDF <- as(orig_elev, "SpatialPointsDataFrame")
@@ -67,6 +70,7 @@ if(print_plots){
 krg <- gstat(NULL, "elevation", elevation~1, elev_spatDF, model = f_var, 
              nmax = 24) 
 elev_hec <- interpolate(irish_hec_raster, krg)
+elev_1km <- interpolate(irish_1km_raster, krg)
 
 if(print_plots){
   par(mfrow = c(1, 2))
@@ -78,3 +82,4 @@ if(print_plots){
 ## save results ---------------------------------------------------------------
 # this is the prefered format for single objects
 saveRDS(elev_hec, file = "elevation_hec_ETOPO1.rds") 
+saveRDS(elev_1km, file = "elevation_1km_ETOPO1.rds")

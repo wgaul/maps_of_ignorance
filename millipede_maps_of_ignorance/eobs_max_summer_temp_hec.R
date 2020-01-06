@@ -46,6 +46,9 @@ ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_hec_raster) <- 10000
+irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_1km_raster) <- 1000
 ### --------------------- end hectad raster -----------------------------------
 
 ## calculate 98th quantile of maximum daily temp for each year -----------------
@@ -105,6 +108,7 @@ dimnames(spat_mean_tx@coords)[[2]][which(
 # Interpolate data in spat_tx and spat_mean_tx to the raster 
 # grid irish_hec_raster
 irish_spat_grid <- as(irish_hec_raster, 'SpatialGrid')
+irish_spat_grid_1km <- as(irish_1km_raster, 'SpatialGrid')
 
 ## mean min (98th quantile) winter temp over all years
 # create empirical variogram for mean min winter temp
@@ -128,21 +132,24 @@ krg_mean_tx <- gstat(formula = mean_tx~1,
 
 krg_mean_tx_predict <- predict(krg_mean_tx, irish_spat_grid)
 names(krg_mean_tx_predict) <- c("mean_tx", "variance")
+krg_mean_tx_predict_1km <- predict(krg_mean_tx, irish_spat_grid_1km)
+names(krg_mean_tx_predict_1km) <- c("mean_tx", "variance")
 
 # make rasters
 krg_mean_tx_rast <- raster::raster(krg_mean_tx_predict)
+krg_mean_tx_rast_1km <- raster::raster(krg_mean_tx_predict_1km)
 
 # masking with shapefile, but I think the shapefile cuts off some hectads that
 # do have data (some sp. datasets have 1014 hectads)
 if(print_plots) {
   plot(raster::mask(krg_mean_tx_rast, ir_TM75))
 }
-krig_mean_tx_map <- raster::brick(krg_mean_tx_predict)
-krig_mean_tx_map <- raster::mask(krig_mean_tx_map, ir_TM75) 
-names(krig_mean_tx_map) <- c("mean_tx", "variance")
-if(print_plots) {
-  plot(krig_mean_tx_map, main = "Average 98th quantile of summer tx")
-}
+# krig_mean_tx_map <- raster::brick(krg_mean_tx_predict)
+# krig_mean_tx_map <- raster::mask(krig_mean_tx_map, ir_TM75) 
+# names(krig_mean_tx_map) <- c("mean_tx", "variance")
+# if(print_plots) {
+#   plot(krig_mean_tx_map, main = "Average 98th quantile of summer tx")
+# }
 ### save outputs ---------------------------------------------------------------
-save(krg_mean_tx_predict, krg_mean_tx_rast, krig_mean_tx_map, 
-     file = "summer_tx_hectad.RData")
+saveRDS(krg_mean_tx_rast, file = "summer_tx_hectad.rds")
+saveRDS(krg_mean_tx_rast_1km, file = "summer_tx_1km.rds")

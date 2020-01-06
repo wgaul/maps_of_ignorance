@@ -23,12 +23,18 @@ mill <- bind_rows(test_data, training_data)
 rm(test_data, training_data)
 
 ### prepare and load environmental data ---------------------------------------
-if(!all(file.exists("annual_precip_hectad.RData") & 
-        file.exists("summer_tx_hectad.RData") & 
-        file.exists("winter_tn_hectad.RData") & 
+if(!all(file.exists("annual_precip_hectad.rds") & 
+        file.exists("annual_precip_1km.rds") &
+        file.exists("summer_tx_hectad.rds") & 
+        file.exists("summer_tx_1km.rds") & 
+        file.exists("winter_tn_hectad.rds") &
+        file.exists("winter_tn_1km.rds") & 
         file.exists("elevation_hec_ETOPO1.rds") & 
+        file.exists("elevation_1km_ETOPO1.rds") & 
         file.exists("corine_label_1_hectad.RData") & 
+        file.exists("corine_label_1_1km.RData") & 
         file.exists("corine_label_2_hectad.RData") & 
+        file.exists("corine_label_2_1km.RData") &
         file.exists("coast_dist_hec.RData") & 
         file.exists("coast_dist_1km.RData"))) {
   source("./eobs_annual_precipitation_hectad.R")

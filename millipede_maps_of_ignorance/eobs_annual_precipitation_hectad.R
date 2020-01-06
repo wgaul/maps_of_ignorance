@@ -52,6 +52,10 @@ ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
             crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_hec_raster) <- 10000
+
+irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_1km_raster) <- 1000
 ### --------------------- end hectad raster -----------------------------------
 
 ### calculate annual precipitation --------------------------------------------
@@ -124,7 +128,7 @@ dimnames(spat_mean_rr@coords)[[2]][which(
 # I want to interpolate data in spat_eobs to the raster grid irish_hec_raster
 # following this: http://rspatial.org/analysis/rst/4-interpolation.html
 irish_spat_grid <- as(irish_hec_raster, 'SpatialGrid')
-
+irish_1km_grid <- as(irish_1km_raster, 'SpatialGrid')
 
 ## mean annual precipitation
 # create empirical variogram for mean annual precipitaion
@@ -148,24 +152,29 @@ krg_mean_rr <- gstat(formula = mean_annual_rr_mm~1,
 
 krg_mean_rr_predict <- predict(krg_mean_rr, irish_spat_grid)
 names(krg_mean_rr_predict) <- c("mean_annual_rr", "variance")
+krg_mean_rr_predict_1km <- predict(krg_mean_rr, irish_1km_grid)
+names(krg_mean_rr_predict_1km) <- c("mean_annual_rr", "variance")
+
 ## !!! ---- RESULT -------- !!!
 ## krg_mean_rr_predict has the results for mean annual precipitation from 
 # 1995-2016 (excluding 2010-2012).  
 # make rasters
 krg_mean_rr_rast <- raster::raster(krg_mean_rr_predict)
+krg_mean_rr_rast_1km <- raster::raster(krg_mean_rr_predict_1km)
 
 # masking with shapefile, but I think the shapefile cuts off some hectads that
 # do have data (some sp. datasets have 1014 hectads)
 if(print_plots) {
   plot(raster::mask(krg_mean_rr_rast, ir_TM75))
+  plot(raster::mask(krg_mean_rr_rast_1km, ir_TM75))
 }
 
-krig_mean_rr_map <- raster::brick(krg_mean_rr_predict)
-# krig_mean_rr_map <- raster::mask(krig_mean_rr_map, ir_TM75) 
-names(krig_mean_rr_map) <- c("mean_annual_rr", "variance")
-if(print_plots) {
-  plot(krig_mean_rr_map, main = "Average annual rr")
-}
+# krig_mean_rr_map <- raster::brick(krg_mean_rr_predict)
+# # krig_mean_rr_map <- raster::mask(krig_mean_rr_map, ir_TM75) 
+# names(krig_mean_rr_map) <- c("mean_annual_rr", "variance")
+# if(print_plots) {
+#   plot(krig_mean_rr_map, main = "Average annual rr")
+# }
 
 ### Check NAs and errors ------------------------------------------------------
 # these plots only work after creating spat_eobs based on 'nas' rather than
@@ -209,5 +218,5 @@ if(view_precip_nas == T) {
 ## end diagnosing NAs
 
 ### save outputs ---------------------------------------------------------------
-save(krg_mean_rr_predict, krg_mean_rr_rast, krig_mean_rr_map, 
-     file = "annual_precip_hectad.RData")
+saveRDS(krg_mean_rr_rast, file = "annual_precip_hectad.rds")
+saveRDS(krg_mean_rr_rast_1km, file = "annual_precip_1km.rds")
