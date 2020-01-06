@@ -4,7 +4,7 @@
 ## author: Willson Gaul wgaul@hotmail.com (based on a script by Hannah White
 ##          vasc_fres_all.R shared with wg via GitHub in April 2018)
 ## created: 2 May 2018 
-## last modified: 26 Nov 2019 - change directory to millipede maps of ignorance project
+## last modified: 23 Dec 2019 - remove water from proportion calculations
 ####################################
 
 corine <- raster("./data/CORINE_IE.grd")
@@ -27,19 +27,28 @@ corine_df$LABEL2 <- make.names(corine_df$LABEL2, unique = FALSE)
 clc_l1_counts_hecs <- array(0, dim = c(nrow(hecs), 
                                        length(unique(c_legend$LABEL1))))
 colnames(clc_l1_counts_hecs) <- make.names(unique(c_legend$LABEL1), unique = T)
+# remove water bodies column (for millipedes I don't think the proportion of 
+# water in a grid square matters much)
+clc_l1_counts_hecs <- clc_l1_counts_hecs[, colnames(clc_l1_counts_hecs) != 
+                                           "Water.bodies"]
+
 # make array to hold proportion of each Label1-level land use class in hectads
 clc_l1_props_hecs <- array(0, dim = c(nrow(hecs), 
-                                      length(unique(c_legend$LABEL1)))) 
-colnames(clc_l1_props_hecs) <- make.names(unique(c_legend$LABEL1), unique = T)
+                                      ncol(clc_l1_counts_hecs))) 
+colnames(clc_l1_props_hecs) <- make.names(colnames(clc_l1_counts_hecs), 
+                                          unique = T)
 
 # make array to hold the number of LABEL2-level land use classes in each hectad
 clc_l2_counts_hecs <- array(0, dim = c(nrow(hecs), 
                                        length(unique(c_legend$LABEL2))))
 colnames(clc_l2_counts_hecs) <- make.names(unique(c_legend$LABEL2), unique = T)
+clc_l2_counts_hecs <- clc_l2_counts_hecs[, colnames(clc_l2_counts_hecs) %nin% 
+                                           c("Inland.waters", "Marine.waters", 
+                                             "UNCLASSIFIED.WATER.BODIES")]
 # make array to hold proportion of each LABEL2-level land use class in hectads
-clc_l2_props_hecs <- array(0, dim = c(nrow(hecs), 
-                                      length(unique(c_legend$LABEL2)))) 
-colnames(clc_l2_props_hecs) <- make.names(unique(c_legend$LABEL2), unique = T)
+clc_l2_props_hecs <- array(0, dim = c(nrow(hecs), ncol(clc_l2_counts_hecs))) 
+colnames(clc_l2_props_hecs) <- make.names(colnames(clc_l2_counts_hecs), 
+                                          unique = T)
 
 for (i in 1:nrow(hecs)) {
   # find centers of corine raster cells that lie within each hectad
@@ -112,8 +121,8 @@ forest_seminatural_l1_rast <- raster::raster(
   clc_l1_props_hecs["Forest.and.semi.natural.areas"])
 wetlands_l1_rast <- raster::raster(
   clc_l1_props_hecs["Wetlands"])
-water_l1_rast <- raster::raster(
-  clc_l1_props_hecs["Water.bodies"])
+# water_l1_rast <- raster::raster(
+#   clc_l1_props_hecs["Water.bodies"])
 # unclassified_l1_rast <- raster::raster(
 #   clc_l1_props_hecs["UNCLASSIFIED"])
 
@@ -144,10 +153,10 @@ inland_wetlands_l2_rast <- raster::raster(
   clc_l2_props_hecs["Inland.wetlands"])
 maritime_wetlands_l2_rast <- raster::raster(
   clc_l2_props_hecs["Maritime.wetlands"])
-inland_water_l2_rast <- raster::raster(
-  clc_l2_props_hecs["Inland.waters"])
-marine_water_l2_rast <- raster::raster(
-  clc_l2_props_hecs["Marine.waters"])
+# inland_water_l2_rast <- raster::raster(
+#   clc_l2_props_hecs["Inland.waters"])
+# marine_water_l2_rast <- raster::raster(
+#   clc_l2_props_hecs["Marine.waters"])
 
 ## end make rasters -----------------------------------------------------------
 
@@ -158,7 +167,7 @@ rm(list = c("c_legend", "corine_df", "corine_sub", "hecs", "corine",
 ## save outputs --------------------------------------------------------------
 ## write out RData with rasters and results dfs
 save(clc_l1_props_hecs, artificial_surfaces_l1_rast, agricultural_l1_rast, 
-     forest_seminatural_l1_rast, wetlands_l1_rast, water_l1_rast,
+     forest_seminatural_l1_rast, wetlands_l1_rast, #water_l1_rast,
      file = "corine_label_1_hectad.RData")
 
 save(urban_fabric_l2_rast, industrial_commercial_transport_l2_rast, 
@@ -166,5 +175,5 @@ save(urban_fabric_l2_rast, industrial_commercial_transport_l2_rast,
      arable_land_l2_rast, permanent_crops_l2_rast, pasture_l2_rast, 
      heterogeneous_ag_l2_rast, forest_l2_rast, scrub_herbaceous_l2_rast, 
      open_space_no_veg_l2_rast, inland_wetlands_l2_rast, 
-     maritime_wetlands_l2_rast, inland_water_l2_rast, marine_water_l2_rast, 
+     maritime_wetlands_l2_rast, #inland_water_l2_rast, marine_water_l2_rast, 
      file = "corine_label_2_hectad.RData")

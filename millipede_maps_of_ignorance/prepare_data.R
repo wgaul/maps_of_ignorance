@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 26 Nov 2019
+## last modified: 6 Jan 2020
 ##############################
 
 ### load millipede data
@@ -12,6 +12,9 @@ load("./data/6_Oct_download/NBDC_training_data.Rdata")
 load("./data/6_Oct_download/test_vault/NBDC_test_data.Rdata")
 
 hec_names <- read_csv("./data/Irish_land_hectads.csv")
+# hopefully make hectads line up with grid cells of predictor raster brick
+# hec_names$eastings = hec_names$eastings - 4900 
+# hec_names$northings = hec_names$northings - 4900
 
 # combine test and training data for all groups
 test_data <- test_data$millipede
@@ -92,8 +95,8 @@ mill_spat <- SpatialPointsDataFrame(coords = mill[, c("eastings", "northings")],
 # make sure millipede data is in same projection as predictor data
 mill_spat <- spTransform(mill_spat, raster::projection(pred_brick))
 
-pred_df <- data.frame(raster::extract(pred_brick, mill_spat, 
-                                      df = TRUE))
+pred_df <- data.frame(raster::extract(pred_brick, mill_spat, method = "simple",
+                                      df = TRUE, cellnumbers = TRUE))
 mill <- cbind(mill, pred_df)
 ### end prepare millipede data ------------------------------------------------
 

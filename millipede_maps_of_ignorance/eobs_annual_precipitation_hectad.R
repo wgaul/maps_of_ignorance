@@ -34,7 +34,7 @@
 ## 
 ## author: Willson Gaul
 ## created: 25 Sep 2017
-## last modified: 25 Oct 2019 - change directories to this millipede project
+## last modified: 6 Jan 2020 - change how template raster is produced
 #################################### 
 
 load("./data/eobs.RData")
@@ -48,17 +48,10 @@ ir <- readOGR(dsn='./data/', layer='ireland_coastline')
 ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 
 ### ----------------- prepare hectad raster -----------------------------------
-# rasterize the hectad shapefile so that I can predict to it later
-src_filename <- "./data/IE_10km_hecs.shp"
-dst_filename <- "IE_10km_hecs_raster.tif"
-irish_hec_raster <- gdalUtils::gdal_rasterize(src_filename, 
-                                              dst_filename = dst_filename, 
-                                              a = "hectad_coo", 
-                                              tr = c(10000, 10000),
-                                              output_Raster = F)
-irish_hec_raster <- raster::raster("./data/IE_10km_hecs_raster.tif")
-irish_hec_raster <- projectRaster(from = irish_hec_raster, 
-                                  crs = CRS("+init=epsg:29903"))
+# make 10km square template raster
+irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+            crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_hec_raster) <- 10000
 ### --------------------- end hectad raster -----------------------------------
 
 ### calculate annual precipitation --------------------------------------------
@@ -131,6 +124,7 @@ dimnames(spat_mean_rr@coords)[[2]][which(
 # I want to interpolate data in spat_eobs to the raster grid irish_hec_raster
 # following this: http://rspatial.org/analysis/rst/4-interpolation.html
 irish_spat_grid <- as(irish_hec_raster, 'SpatialGrid')
+
 
 ## mean annual precipitation
 # create empirical variogram for mean annual precipitaion

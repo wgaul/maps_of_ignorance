@@ -37,10 +37,10 @@ dist_to_nearest_record <- function(df, query_points, coords, parallel = FALSE,
   # scaling variables)
   df_sds <- lapply(df[, coords], function(x) sd(x, na.rm = T))
   df_sds <- as.matrix(dist(df_sds))
-  if(any(df_sds > 2)) stop("Scale dimensions of records before using this function.")
+  if(any(df_sds > 2)) warning("Did you scale spatial dimensions of records before using dist_to_nearest_record()?")
   q_sds <- lapply(query_points[, coords], function(x) sd(x, na.rm = T))
   q_sds <- as.matrix(dist(q_sds))
-  if(any(q_sds > 2)) stop("Scale dimensions of query points before using this function.")
+  if(any(q_sds > 2)) warning("Did you scale dimensions of query points before using dist_to_nearest_record()?.")
   
   dists <- query_points # make df to hold resulting minimum distances
   dists$dist_to_nearest_rec <- NA
@@ -73,8 +73,8 @@ dist_to_nearest_record <- function(df, query_points, coords, parallel = FALSE,
     }
   }
   
-  # make distances relative so most distant grid query point has distance = 1
-  dists$dist_to_nearest_rec <- dists$dist_to_nearest_rec/max(
+  # make a relative distance colulmn also so most distant grid query point has distance = 1
+  dists$dist_to_nearest_rec_relative <- dists$dist_to_nearest_rec/max(
     dists$dist_to_nearest_rec, na.rm = T)
   dists # return df with distance from each query point to nearest record
 }

@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 26 Nov 2019
+## last modified: 6 Jan 2020
 #################################
 dbg <- F
 
@@ -65,8 +65,8 @@ ggplot(data = temp_res_df, aes(x = factor(temp_resolution,
 
 
 ## map spatial bias - data density
-# count number of records per hectad
-nlist_hec <- mill %>%
+# count number of checklists per hectad
+nlist_hec <- select(mill, hectad, checklist_ID) %>%
   group_by(hectad) %>%
   summarise(nlist = n_distinct(checklist_ID)) %>%
   full_join(., hec_names, by = "hectad") %>%
@@ -102,7 +102,8 @@ ggplot() +
 query_points <- cbind(hec_names,  
                       data.frame(raster::extract(pred_brick, hec_names_spat, 
                                                  df = TRUE, 
-                                                 method = "bilinear")))
+                                                 method = "simple", 
+                                                 cellnumbers = TRUE)))
 query_points$year_csc <- mill$year_csc[mill$year == max(mill$year)][1]
 query_points$eastings_csc <- query_points$eastings - east_mean # centre
 query_points$eastings_csc <- query_points$eastings_csc/spat_sd # scale
@@ -110,23 +111,24 @@ query_points$northings_csc <- query_points$northings - north_mean # centre
 query_points$northings_csc <- query_points$northings_csc/spat_sd # scale
 
 ## measure spatial distance ---------------------------------------------------
-dist_sp <- dist_to_nearest_record(mill, 
+tp <- sample(1:nrow(mill), size = 600) # just for testing
+dist_sp <- dist_to_nearest_record(mill[tp, ], 
                                   query_points = query_points, 
                                   coords = c("eastings_csc", 
                                              "northings_csc"), 
                                   parallel = T, ncores = 3, 
-                                  chunk.size = 1621)
+                                  chunk.size = 200) # 1621
 ggplot(data = dist_sp, aes(x = eastings, y = northings)) + 
   geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
-  geom_point(data = mill, aes(x = eastings, y = northings),
-             size = 1, color = "orange") +
-  # geom_point(data = mill[tp, ], aes(x = eastings, y = northings),
-  #            color = "red") + 
-  scale_color_gradient(limits = c(0, 1)) + 
+  # geom_point(data = mill, aes(x = eastings, y = northings),
+  #            size = 1, color = "orange") +
+  geom_point(data = mill[tp, ], aes(x = eastings, y = northings),
+             color = "red") +
+  # scale_color_gradient(limits = c(0, 1)) + 
   ggtitle("spatial distance")
 
 ## measure environmental distance -----------------------------------
-dist_sp_env <- dist_to_nearest_record(mill, 
+dist_sp_env <- dist_to_nearest_record(mill[tp, ], 
                                       query_points = query_points, 
                                       coords = c("mean_tn", "mean_tx", 
                                                  "mean_rr", 
@@ -136,36 +138,18 @@ dist_sp_env <- dist_to_nearest_record(mill,
                                                  "arable_l2", "coast_dist", 
                                                  "elev"), 
                                       parallel = T, ncores = 3, 
-                                      chunk.size = 1621)
+                                      chunk.size = 200) #1621
 ggplot(data = dist_sp_env, aes(x = eastings, y = northings)) + 
-  geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
-  geom_point(data = mill, aes(x = eastings, y = northings),
+  geom_point(aes(color = dist_to_nearest_rec), size = 7) + 
+  geom_point(data = mill[tp, ], 
+             aes(x = eastings, y = northings),
              size = 1, color = "orange") +
-  scale_color_gradient(limits = c(0, 1)) + 
+  # scale_color_gradient(limits = c(0, 1)) + 
   ggtitle("environmental distance")
 
 
 
 ## measure spatial & environmental distance -----------------------------------
-# dist_sp_env <- dist_to_nearest_record(mill, 
-#                                       query_points = query_points, 
-#                                       coords = c("eastings_csc", 
-#                                                  "northings_csc", 
-#                                                  "mean_tn", "mean_tx", 
-#                                                  "mean_rr", 
-#                                                  "artificial_surfaces", 
-#                                                  "forest_seminatural_l1", 
-#                                                  "wetlands_l1", "pasture_l2", 
-#                                                  "arable_l2", "coast_dist", 
-#                                                  "elev"), 
-#                                       parallel = T, ncores = 3, 
-#                                       chunk.size = 1621)
-# ggplot(data = dist_sp_env, aes(x = eastings, y = northings)) + 
-#   geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
-#   geom_point(data = mill, aes(x = eastings, y = northings),
-#              size = 1, color = "orange") +
-#   scale_color_gradient(limits = c(0, 1)) + 
-#   ggtitle("spatial & environmental distance")
 
 
 ## measure spatial & year distance -------------------------------------------

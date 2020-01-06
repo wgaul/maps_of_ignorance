@@ -18,10 +18,10 @@ hecs_shp <- st_read(dsn='./data/',
                     layer='IE_10km_hecs')
 hecs_shp <- st_transform(hecs_shp, crs = 29903)
 
-# load template raster
-irish_hec_raster <- raster::raster("./data/IE_10km_hecs_raster.tif")
-irish_hec_raster <- projectRaster(from = irish_hec_raster, 
-                                  crs = CRS("+init=epsg:29903"))
+# make 10km square template raster
+irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+res(irish_hec_raster) <- 10000
 
 # make 1km raster and shapefile templates 
 ie_1km_raster <- disaggregate(irish_hec_raster, fact = 10)
