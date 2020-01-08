@@ -31,6 +31,8 @@ library(tidyverse)
 
 source("../functions_maps_of_ignorance.R")
 
+n_cores <- 3
+
 source("prepare_data.R")
 
 t_size <- 19
@@ -116,8 +118,8 @@ dist_sp <- dist_to_nearest_record(mill[tp, ],
                                   query_points = query_points, 
                                   coords = c("eastings_csc", 
                                              "northings_csc"), 
-                                  parallel = T, ncores = 3, 
-                                  chunk.size = 200) # 1621
+                                  parallel = T, ncores = n_cores, 
+                                  chunk.size = floor(nrow(mill)/n_cores)) # 1621
 ggplot(data = dist_sp, aes(x = eastings, y = northings)) + 
   geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
   # geom_point(data = mill, aes(x = eastings, y = northings),
@@ -137,14 +139,13 @@ dist_sp_env <- dist_to_nearest_record(mill[tp, ],
                                                  "wetlands_l1", "pasture_l2", 
                                                  "arable_l2", "coast_dist", 
                                                  "elev"), 
-                                      parallel = T, ncores = 3, 
-                                      chunk.size = 200) #1621
+                                      parallel = T, ncores = n_cores, 
+                                      chunk.size = floor(nrow(mill)/n_cores)) #1621
 ggplot(data = dist_sp_env, aes(x = eastings, y = northings)) + 
   geom_point(aes(color = dist_to_nearest_rec), size = 7) + 
   geom_point(data = mill[tp, ], 
              aes(x = eastings, y = northings),
              size = 1, color = "orange") +
-  # scale_color_gradient(limits = c(0, 1)) + 
   ggtitle("environmental distance")
 
 
@@ -227,8 +228,8 @@ make_plot <- function(test_dates, mill, query_points) {
                                         coords = c("eastings_csc", 
                                                    "northings_csc", 
                                                    "day_lag_csc"), 
-                                        parallel = T, ncores = 3, 
-                                        chunk.size = 334) #1621
+                                        parallel = T, ncores = n_cores, 
+                                        chunk.size = floor(nrow(mill)/n_cores)) #1621
   ggplot(data = dist_sp_doy, aes(x = eastings, y = northings)) + 
     geom_point(aes(color = dist_to_nearest_rec), size = 5) + 
     scale_color_gradient(name = "Distance\nto nearest\nrecord") + 

@@ -53,7 +53,7 @@ clc_l1_props_hecs <- array(0, dim = c(nrow(hecs),
 colnames(clc_l1_props_hecs) <- make.names(colnames(clc_l1_counts_hecs), 
                                           unique = T)
 # make array to hold proportion of each Label1-level land use class in 1 km squares
-clc_l1_props_1km <- array(0, dim = c(nrow(hecs), 
+clc_l1_props_1km <- array(0, dim = c(nrow(df_1km), 
                                       ncol(clc_l1_counts_1km))) 
 colnames(clc_l1_props_1km) <- make.names(colnames(clc_l1_counts_1km), 
                                           unique = T)
@@ -78,7 +78,7 @@ clc_l2_counts_1km <- clc_l2_counts_1km[, colnames(clc_l2_counts_1km) %nin%
                                            c("Inland.waters", "Marine.waters", 
                                              "UNCLASSIFIED.WATER.BODIES")]
 # make array to hold proportion of each LABEL2-level land use class in 1km squares
-clc_l2_props_1km <- array(0, dim = c(nrow(hecs), ncol(clc_l2_counts_1km))) 
+clc_l2_props_1km <- array(0, dim = c(nrow(df_1km), ncol(clc_l2_counts_1km))) 
 colnames(clc_l2_props_1km) <- make.names(colnames(clc_l2_counts_1km), 
                                           unique = T)
 
@@ -116,7 +116,6 @@ for (i in 1:nrow(hecs)) {
     clc_l2_props_hecs[i, ] <- clc_l2_counts_hecs[i, ] / sum(
       clc_l2_counts_hecs[i, ])
   }
-
 }
 
 for (i in 1:nrow(df_1km)) {
