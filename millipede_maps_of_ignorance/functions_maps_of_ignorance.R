@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 25 Oct 2019
+## last modified: 9 Jan 2020
 ###########################
 
 euc_dist <- function(x, y) {
@@ -12,8 +12,8 @@ euc_dist <- function(x, y) {
   #         point x and y in any number of dimensions
   # VALUE:  The euclidean distance between x and y
   if(length(x) != length(y)) stop("x and y must be vectors of the same length.")
-  ndim <- length(x) # get the number of dimensions to use
-  sides <- mapply(FUN = function(a, b) {a-b}, a = x, b = y)
+  # sides <- mapply(FUN = function(a, b) {a-b}, a = x, b = y) # 9 Jan 2020: why using mapply?
+  sides <- x - y # get distance between points in each dimension
   sqrt(sum(sides^2)) # return euclidean distance
 }
 
