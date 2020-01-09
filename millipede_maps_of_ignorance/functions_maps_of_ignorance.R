@@ -12,7 +12,6 @@ euc_dist <- function(x, y) {
   #         point x and y in any number of dimensions
   # VALUE:  The euclidean distance between x and y
   if(length(x) != length(y)) stop("x and y must be vectors of the same length.")
-  # sides <- mapply(FUN = function(a, b) {a-b}, a = x, b = y) # 9 Jan 2020: why using mapply?
   sides <- x - y # get distance between points in each dimension
   sqrt(sum(sides^2)) # return euclidean distance
 }
