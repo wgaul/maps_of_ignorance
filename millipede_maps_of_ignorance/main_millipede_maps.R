@@ -9,9 +9,10 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 8 Jan 2020
+## last modified: 9 Jan 2020
 #################################
 dbg <- F
+calc_1k_distances <- T # run distances for 1km grid (might take a long time)
 
 library(wgutil)
 library(Hmisc)
@@ -31,7 +32,7 @@ library(tidyverse)
 
 source("functions_maps_of_ignorance.R")
 
-n_cores <- 22
+n_cores <- 3
 
 source("prepare_data.R")
 
@@ -56,16 +57,19 @@ temp_res_df$nrec[temp_res_df$temp_resolution == "one_month"] <- length(which(
 temp_res_df$nrec[temp_res_df$temp_resolution == "one_year"] <- length(which(
   as.numeric(mill$temp_resolution) > 31 & as.numeric(mill$temp_resolution) < 366))
 
-ggplot(data = temp_res_df, aes(x = factor(temp_resolution, 
-                                          levels = c("one_day", "one_month", 
-                                                     "one_year"), 
-                                          labels = c("One Day", "One Month", 
-                                                     "One Year")), 
-                               y = nrec)) + 
+p_temp_res <- ggplot(data = temp_res_df, 
+                     aes(x = factor(temp_resolution, 
+                                    levels = c("one_day", "one_month", 
+                                               "one_year"), 
+                                    labels = c("One Day", "One Month", 
+                                               "One Year")), 
+                         y = nrec)) + 
   geom_bar(stat = "identity") +
   xlab("Temporal Resolution of Records") + 
   ylab("Number of Records") + 
-  theme_bw()
+  theme_bw() + 
+  theme(text = element_text(size = t_size*1.2), 
+        legend.key.width = unit(1.8*t_size, "points"))
 
 
 ## map spatial bias - data density
@@ -97,14 +101,16 @@ p_data_density <- tryCatch({ggplot() +
     geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
                  arrow = arrow(length = unit(0.1, "npc"))) + 
     theme_bw() + 
-    theme(text = element_text(size = t_size), 
+    theme(text = element_text(size = t_size*1.2), 
           axis.title = element_blank(),
           axis.text = element_blank(), 
           axis.ticks = element_blank(), 
-          strip.text = element_text(hjust = -0.01))}, 
+          strip.text = element_text(hjust = -0.01), 
+          legend.key.width = unit(1.8*t_size, "points"))}, 
     error = function(x) NA)
 
 ## make query points ---------------------------------------------------------
+# make query points for hectads
 query_points <- cbind(hec_names,  
                       data.frame(raster::extract(pred_brick, hec_names_spat, 
                                                  df = TRUE, 
@@ -116,6 +122,21 @@ query_points$eastings_csc <- query_points$eastings_csc/spat_sd # scale
 query_points$northings_csc <- query_points$northings - north_mean # centre
 query_points$northings_csc <- query_points$northings_csc/spat_sd # scale
 
+if(calc_1k_distances) { # make query points for 1km grid squares
+  # Load Ireland coastline
+  ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+  ir_TM75 <- spTransform(ir, CRSobj = CRS("+init=epsg:29903"))
+  rm(ir)
+  query_points_1k <- data.frame(rasterToPoints(mask(pred_brick_1k, ir_TM75), 
+                                               spatial = F))
+  colnames(query_points_1k)[1:2] <- c("eastings", "northings")
+  query_points_1k$year_csc <- mill$year_csc[mill$year == max(mill$year)][1]
+  query_points_1k$eastings_csc <- query_points_1k$eastings - east_mean # centre
+  query_points_1k$eastings_csc <- query_points_1k$eastings_csc/spat_sd # scale
+  query_points_1k$northings_csc <- query_points_1k$northings - north_mean # centre
+  query_points_1k$northings_csc <- query_points_1k$northings_csc/spat_sd # scale
+}
+
 ## measure spatial distance ---------------------------------------------------
 dist_sp <- dist_to_nearest_record(mill[tp, ], 
                                   query_points = query_points, 
@@ -123,6 +144,9 @@ dist_sp <- dist_to_nearest_record(mill[tp, ],
                                              "northings_csc"), 
                                   parallel = T, ncores = n_cores, 
                                   chunk.size = floor(nrow(mill)/n_cores)) # 1621
+try(saveRDS(dist_sp, "dist_sp.rds"))
+print(str(mill[tp, ]))
+
 p_spat_dist <- tryCatch({ggplot(data = dist_sp, aes(x = eastings, y = northings)) + 
     geom_raster(aes(fill = dist_to_nearest_rec)) + 
     # geom_point(data = mill[tp, ], aes(x = eastings, y = northings),
@@ -135,6 +159,31 @@ p_spat_dist <- tryCatch({ggplot(data = dist_sp, aes(x = eastings, y = northings)
           legend.key.width = unit(1.8*t_size, "points"))}, 
     error = function(x) NA)
 
+if(calc_1k_distances) {
+  dist_sp_1k <- dist_to_nearest_record(mill[tp, ], 
+                                       query_points = query_points_1k, 
+                                       coords = c("eastings_csc", 
+                                                  "northings_csc"), 
+                                       parallel = T, ncores = n_cores, 
+                                       chunk.size = floor(nrow(mill)/n_cores))
+  try(save_rds(dist_sp_1k, "dist_sp_1k.rds"))
+  print(dim(mill[tp, ]))
+  
+  p_spat_dist_1k <- tryCatch({ggplot(data = dist_sp_1k, 
+                                     aes(x = eastings, y = northings)) + 
+      geom_raster(aes(fill = dist_to_nearest_rec)) + 
+      # geom_point(data = mill[tp, ], aes(x = eastings, y = northings),
+      #            color = "orange") +
+      scale_fill_gradient(name = "Euclidean\ndistance\nto nearest\nrecord", 
+                          trans = "reverse") + 
+      coord_fixed(c_f) +
+      ggtitle("spatial distance") + 
+      theme(text = element_text(size = t_size*1.2), 
+            legend.key.width = unit(1.8*t_size, "points"))}, 
+      error = function(x) NA)
+}
+
+
 ## measure environmental distance -----------------------------------
 dist_sp_env <- dist_to_nearest_record(mill[tp, ], 
                                       query_points = query_points, 
@@ -146,8 +195,11 @@ dist_sp_env <- dist_to_nearest_record(mill[tp, ],
                                                  "arable_l2", "coast_dist", 
                                                  "elev"), 
                                       parallel = T, ncores = n_cores, 
-                                      chunk.size = floor(nrow(mill[tp, ])/n_cores)) #1621
-p_dist_env <- tryCatch({ggplot(data = dist_sp_env, aes(x = eastings, y = northings)) + 
+                                      chunk.size = floor(nrow(mill[tp, ])/n_cores))
+try(saveRDS(dist_sp_env, file = "dist_sp_env.rds"))
+
+p_dist_env <- tryCatch({ggplot(data = dist_sp_env, 
+                               aes(x = eastings, y = northings)) + 
     geom_raster(aes(fill = dist_to_nearest_rec)) + 
     # geom_point(data = mill[tp, ], 
     #            aes(x = eastings, y = northings),
@@ -161,6 +213,32 @@ p_dist_env <- tryCatch({ggplot(data = dist_sp_env, aes(x = eastings, y = northin
           legend.key.width = unit(1.8*t_size, "points"))}, 
     error = function(x) NA)
 
+if(calc_1k_distances) {
+  dist_sp_env_1k <- dist_to_nearest_record(
+    mill[tp, ], 
+    query_points = query_points_1k, 
+    coords = c("mean_tn", "mean_tx", "mean_rr", "artificial_surfaces", 
+               "forest_seminatural_l1", "wetlands_l1", "pasture_l2", 
+               "arable_l2", "coast_dist", "elev"), 
+    parallel = T, ncores = n_cores, 
+    chunk.size = floor(nrow(mill[tp, ])/n_cores))
+  try(saveRDS(dist_sp_env_1k, file = "dist_sp_env_1k.rds"))
+  
+  p_dist_env_1k <- tryCatch({ggplot(data = dist_sp_env_1k, 
+                                 aes(x = eastings, y = northings)) + 
+      geom_raster(aes(fill = dist_to_nearest_rec)) + 
+      # geom_point(data = mill[tp, ], 
+      #            aes(x = eastings, y = northings),
+      #            size = 1, color = "orange") +
+      scale_fill_gradient(name = "Euclidean\ndistance\nto nearest\nrecord", 
+                          trans = "reverse") + 
+      coord_fixed(c_f) + 
+      ggtitle("environmental distance") + 
+      theme_bw() + 
+      theme(text = element_text(size = t_size*1.2), 
+            legend.key.width = unit(1.8*t_size, "points"))}, 
+      error = function(x) NA)
+}
 
 
 ## measure spatial & environmental distance -----------------------------------
@@ -185,7 +263,9 @@ p_year_hist <- tryCatch({ggplot(data = list_year_summary, aes(x = year)) +
     geom_histogram(bins = max(mill$year) - min(mill$year)) + 
     xlab("Year") + 
     ylab("Number of Checklists") + 
-    theme_bw()}, 
+    theme_bw() + 
+    theme(text = element_text(size = t_size*1.2), 
+          legend.key.width = unit(1.8*t_size, "points"))}, 
     error = function(x) NA)
 
 
@@ -209,7 +289,9 @@ p_week_hist <- tryCatch({ggplot(data = list_week_summary, aes(x = day_of_year)) 
                        labels = c("Jan", "Feb", "March", "April", "May", "June", 
                                   "July", "Aug", "Sep", "Oct", "Nov", "Dec")) + 
     ylab("Number of Checklists") + 
-    theme_bw()}, 
+    theme_bw() + 
+    theme(text = element_text(size = t_size*1.2), 
+          legend.key.width = unit(1.8*t_size, "points"))}, 
     error = function(x) NA)
 
 # mill$week <- lubridate::week(mill$StartDate)
@@ -250,6 +332,7 @@ dists_by_month <- tryCatch({lapply(test_dates, FUN = calc_month_dists,
                                    mill = mill[tp, ], 
                                    query_points = query_points)}, 
                            error = function(x) NA)
+try(saveRDS(dists_by_month, file = "dists_by_month.rds"))
 
 # Distance at doy 15
 p_season_winter <- ggplot(data = dists_by_month[[1]], 
@@ -308,6 +391,7 @@ dist_sp_hec_1970_85 <- dist_to_nearest_record(
              "northings_csc"), 
   parallel = T, ncores = n_cores, 
   chunk.size = floor(nrow(mill[mill$year >= 1970 & mill$year <= 1985, ])/n_cores))
+try(saveRDS(dist_sp_hec_1970_85, "dist_sp_hec_1970_85.rds"))
 
 p_sp_1970_85 <- tryCatch({ggplot(data = dist_sp_hec_1970_85, 
                        aes(x = eastings, y = northings)) + 
@@ -332,6 +416,7 @@ dist_sp_hec_1986_2005 <- dist_to_nearest_record(
   parallel = T, ncores = n_cores, 
   chunk.size = floor(nrow(mill[mill$year >= 1986 & 
                                  mill$year <= 2005, ])/n_cores))
+try(saveRDS(dist_sp_hec_1986_2005, "dist_sp_hec_1986_2005.rds"))
 
 p_sp_1986_05 <- tryCatch({ggplot(data = dist_sp_hec_1986_2005, 
                                  aes(x = eastings, y = northings)) + 
@@ -356,6 +441,7 @@ dist_sp_hec_2006_2019 <- dist_to_nearest_record(
   parallel = T, ncores = n_cores, 
   chunk.size = floor(nrow(mill[mill$year >= 2006 & 
                                  mill$year <= 2019, ])/n_cores))
+try(saveRDS(dist_sp_hec_2006_2019, "dist_sp_hec_2006_2019.rds"))
 
 p_sp_2006_19 <- tryCatch({ggplot(data = dist_sp_hec_2006_2019, 
                                  aes(x = eastings, y = northings)) + 
@@ -374,6 +460,7 @@ p_sp_2006_19 <- tryCatch({ggplot(data = dist_sp_hec_2006_2019,
 
 pdf("millipede_maps.pdf") 
 print(p_data_density)
+print(p_temp_res)
 print(p_spat_dist)
 print(p_dist_env)
 print(p_year_hist)
@@ -395,19 +482,25 @@ print(multiplot(
 dev.off()
 
 ## save jpg versons of plots
+try(ggsave("data_density.jpg", p_data_density, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("temporal_res.jpg", p_temp_res, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("spatial_distance.jpg", p_spat_dist, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("env_distance.jpg", p_dist_env, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("year_histogram.jpg", p_year_hist, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("week_histogram.jpg", p_week_hist, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+
 try(ggsave("seasonal_spatial_distance.jpg", 
        multiplot(
          p_season_winter, p_season_spring, p_season_summer, p_season_autumn, 
          layout = matrix(c(1,2,3,4), nrow = 2, byrow = TRUE)), 
        width = 25, height = 25, units = "cm", 
        device = "jpeg"))
-
-try(ggsave("seasonal_spatial_distance_2.jpg", 
-           print(multiplot(
-             p_season_winter, p_season_spring, p_season_summer, p_season_autumn, 
-             layout = matrix(c(1,2,3,4), nrow = 2, byrow = TRUE))), 
-           width = 25, height = 25, units = "cm", 
-           device = "jpeg"))
 
 try(ggsave("survey_period_spatial_dists_no_points.jpg", 
        multiplot(p_sp_1970_85, p_sp_1986_05, p_sp_2006_19, 
@@ -429,18 +522,18 @@ try(ggsave("survey_period_spatial_dists.jpg", multiplot(
   width = 45, height = 15, units = "cm", 
   device = "jpeg"))
 
-## alternately, save jpgs individually
-try(ggsave("winter_spatial_distance.jpg", p_season_winter, 
-           width = 25, height = 25, units = "cm", 
-           device = "jpg"))
-try(ggsave("spring_spatial_distance.jpg", p_season_spring, 
-           width = 25, height = 25, units = "cm", 
-           device = "jpg"))
-try(ggsave("summer_spatial_distance.jpg", p_season_summer, 
-           width = 25, height = 25, units = "cm", 
-           device = "jpg"))
-try(ggsave("fall_spatial_distance.jpg", p_season_autumn, 
-           width = 25, height = 25, units = "cm", 
-           device = "jpg"))
+# ## alternately, save jpgs individually
+# try(ggsave("winter_spatial_distance.jpg", p_season_winter, 
+#            width = 25, height = 25, units = "cm", 
+#            device = "jpg"))
+# try(ggsave("spring_spatial_distance.jpg", p_season_spring, 
+#            width = 25, height = 25, units = "cm", 
+#            device = "jpg"))
+# try(ggsave("summer_spatial_distance.jpg", p_season_summer, 
+#            width = 25, height = 25, units = "cm", 
+#            device = "jpg"))
+# try(ggsave("fall_spatial_distance.jpg", p_season_autumn, 
+#            width = 25, height = 25, units = "cm", 
+#            device = "jpg"))
 
 save.image("millipede_maps_sonic_test_8Jan2020.RData")

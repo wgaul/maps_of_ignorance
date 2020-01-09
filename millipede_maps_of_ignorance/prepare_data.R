@@ -45,12 +45,19 @@ if(!all(file.exists("annual_precip_hectad.rds") &
   source("./distance_to_coast_calc.R")
 }
 load("annual_precip_hectad.RData")
+rr_rast_1k <- read_rds("annual_precip_1km.rds")
 load("summer_tx_hectad.RData")
+mean_tx_rast_1k <- read_rds("summer_tx_1km.rds")
 load("winter_tn_hectad.RData")
+mean_tn_rast_1k <- read_rds("winter_tn_1km.rds")
 elev <- read_rds("elevation_hec_ETOPO1.rds")
+elev_1k <- read_rds("elevation_1km_ETOPO1.rds")
 load("corine_label_1_hectad.RData")
+load("corine_label_1_1km.RData")
 load("corine_label_2_hectad.RData")
+load("corine_label_2_1km.RData")
 load("coast_dist_hec.RData")
+load("coast_dist_1km.RData")
 
 pred_brick <- brick(list(
   mean_tn = resample(krg_mean_tn_rast, krg_mean_rr_rast), 
@@ -67,6 +74,20 @@ pred_brick <- brick(list(
 # pred_brick <- mask(pred_brick, pred_brick$artificial_surfaces)
 # scale and centre environmental predictors over study extent
 pred_brick <- scale(pred_brick)
+
+pred_brick_1k <- brick(list(
+  mean_tn = mean_tn_rast_1k, 
+  mean_tx = mean_tx_rast_1k, 
+  mean_rr = rr_rast_1k, 
+  artificial_surfaces = artificial_surfaces_l1_rast_1km, 
+  forest_seminatural_l1 = forest_seminatural_l1_rast_1km, 
+  wetlands_l1 = wetlands_l1_rast_1km, 
+  pasture_l2 = pasture_l2_rast_1km,
+  arable_l2 = arable_land_l2_rast_1km,
+  coast_dist = coast_dist_1km_rast, 
+  elev = elev_1k
+))
+pred_brick_1k <- scale(pred_brick_1k)
 
 # make hec_names spatial 
 hec_names_spat <- SpatialPointsDataFrame(coords = hec_names[, c("eastings", "northings")], 
