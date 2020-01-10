@@ -140,8 +140,8 @@ if(calc_1k_distances) { # make query points for 1km grid squares
 ## measure spatial distance ---------------------------------------------------
 dist_sp <- dist_to_nearest_record(mill[tp, ], 
                                   query_points = query_points, 
-                                  coords = c("eastings_csc", 
-                                             "northings_csc"), 
+                                  coords = c("eastings", 
+                                             "northings"), 
                                   parallel = T, ncores = n_cores, 
                                   chunk.size = floor(nrow(mill)/n_cores)) # 1621
 try(saveRDS(dist_sp, "dist_sp.rds"))
@@ -162,11 +162,11 @@ p_spat_dist <- tryCatch({ggplot(data = dist_sp, aes(x = eastings, y = northings)
 if(calc_1k_distances) {
   dist_sp_1k <- dist_to_nearest_record(mill[tp, ], 
                                        query_points = query_points_1k, 
-                                       coords = c("eastings_csc", 
-                                                  "northings_csc"), 
+                                       coords = c("eastings", 
+                                                  "northings"), 
                                        parallel = T, ncores = n_cores, 
                                        chunk.size = floor(nrow(mill)/n_cores))
-  try(save_rds(dist_sp_1k, "dist_sp_1k.rds"))
+  try(saveRDS(dist_sp_1k, "dist_sp_1k.rds"))
   print(dim(mill[tp, ]))
   
   p_spat_dist_1k <- tryCatch({ggplot(data = dist_sp_1k, 
@@ -227,7 +227,7 @@ if(calc_1k_distances) {
   p_dist_env_1k <- tryCatch({ggplot(data = dist_sp_env_1k, 
                                  aes(x = eastings, y = northings)) + 
       geom_raster(aes(fill = dist_to_nearest_rec)) + 
-      # geom_point(data = mill[tp, ], 
+      # geom_point(data = mill[tp, ],
       #            aes(x = eastings, y = northings),
       #            size = 1, color = "orange") +
       scale_fill_gradient(name = "Euclidean\ndistance\nto nearest\nrecord", 
@@ -487,6 +487,61 @@ p_sp_2006_16 <- tryCatch({ggplot(data = dist_sp_hec_2006_2016,
 
 ### end distance in 3 main recording periods ----------------------------------
 
+### Time since last record -----------------------------------------------------
+target_date <- as.Date("2019-12-31")
+nlist_hec$days_to_rec <- NA
+for(i in 1:nrow(nlist_hec)) {
+  recs <- mill[mill$hectad == nlist_hec$hectad[i], ]
+  if(nrow(recs) > 0) {
+    nlist_hec$days_to_rec[i] <- as.numeric(target_date - max(recs$StartDate))}
+}
+nlist_hec$years_to_rec <- nlist_hec$days_to_rec/365
+
+p_time_since_rec <- tryCatch({ggplot() + 
+    geom_raster(data = nlist_hec, 
+                aes(x = eastings, y = northings, fill = years_to_rec)) + 
+    coord_fixed(c_f) + 
+    scale_fill_gradient(name = "Years\nsince\nlast\nrecord\n", 
+                        trans = "reverse") + 
+    geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+    geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+    geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+                 arrow = arrow(length = unit(0.1, "npc"))) + 
+    ggtitle("Time since last record") + 
+    theme_bw() + 
+    theme(text = element_text(size = t_size*1.2), 
+          axis.title = element_blank(),
+          axis.text = element_blank(), 
+          axis.ticks = element_blank(), 
+          strip.text = element_text(hjust = -0.01), 
+          legend.key.width = unit(1.8*t_size, "points"))}, 
+    error = function(x) NA)
+
+p_hist_time_since_rec <- tryCatch({ggplot(data = nlist_hec, 
+                                          aes(x = years_to_rec)) + 
+    geom_histogram() + 
+    xlab("Years since last record") + 
+    ylab("Number of 10km grid cells") + 
+    theme_bw() + 
+    theme(text = element_text(size = t_size*1.2))}, 
+    error = function(x) NA)
+
+p_20yr_resurvey <- p_time_since_rec + 
+  geom_point(data = nlist_hec[nlist_hec$years_to_rec <= 20 & 
+                                nlist_hec$years_to_rec >= 18 & 
+                                !is.na(nlist_hec$years_to_rec), ], 
+            aes(x = eastings, y = northings), color = "orange") + 
+  ggtitle("Points that were last surveyed\nbetween 18 and 20 years ago\nSurvey priorities to keep\nresurvey period < 20 years")
+
+if(calc_1k_distances) {
+  
+}
+
+### end time since last record ------------------------------------------------
+
+
+
+### Save outputs ------------------------------------------------------------
 pdf("millipede_maps.pdf") 
 print(p_data_density)
 print(p_temp_res)
@@ -517,7 +572,11 @@ try(ggsave("temporal_res.jpg", p_temp_res, width = 25, height = 25,
            units = "cm", device = "jpeg"))
 try(ggsave("spatial_distance.jpg", p_spat_dist, width = 25, height = 25, 
            units = "cm", device = "jpeg"))
+try(ggsave("spatial_distance_1k.jpg", p_spat_dist_1k, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
 try(ggsave("env_distance.jpg", p_dist_env, width = 25, height = 25, 
+           units = "cm", device = "jpeg"))
+try(ggsave("env_distance_1k.jpg", p_dist_env_1k, width = 25, height = 25, 
            units = "cm", device = "jpeg"))
 try(ggsave("year_histogram.jpg", p_year_hist, width = 25, height = 25, 
            units = "cm", device = "jpeg"))
@@ -550,6 +609,17 @@ try(ggsave("survey_period_spatial_dists.jpg", multiplot(
   layout = matrix(c(1,2,3), nrow = 1, byrow = TRUE)), 
   width = 45, height = 15, units = "cm", 
   device = "jpeg"))
+
+try(ggsave("time_since_last_record_map.jpg", p_time_since_rec, 
+           width = 25, height = 25, units = "cm", device = "jpeg"))
+
+try(ggsave("20_year_resurvey_targets.jpg", p_20yr_resurvey, 
+           width = 25, height = 25, units = "cm", device = "jpeg"))
+
+try(ggsave("time_since_last_record_hist.jpg", p_hist_time_since_rec, 
+           width = 25, height = 25, units = "cm", device = "jpeg"))
+
+
 
 # ## alternately, save jpgs individually
 # try(ggsave("winter_spatial_distance.jpg", p_season_winter, 
