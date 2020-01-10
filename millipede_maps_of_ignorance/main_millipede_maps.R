@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 9 Jan 2020
+## last modified: 10 Jan 2020
 #################################
 dbg <- F
 calc_1k_distances <- T # run distances for 1km grid (might take a long time)
@@ -534,7 +534,49 @@ p_20yr_resurvey <- p_time_since_rec +
   ggtitle("Points that were last surveyed\nbetween 18 and 20 years ago\nSurvey priorities to keep\nresurvey period < 20 years")
 
 if(calc_1k_distances) {
+  dist_sp_1k$last_record_date <- NA
+  dist_sp_1k$days_to_rec <- NA
+  for(i in 1:nrow(dist_sp_1k)) {
+    ec <- dist_sp_1k$eastings[i] # eastings coordinate
+    nc <- dist_sp_1k$northings[i] # northings coordinate
+    recs <- mill[mill$eastings >= ec - 500 & mill$eastings < ec + 500 & 
+                   mill$northings >= nc - 500 & mill$northings < nc + 500, ]
+    if(nrow(recs) > 0) {
+      dist_sp_1k$last_record_date[i] <- tryCatch(max(recs$StartDate, na.rm = T), 
+                                                 error = function(x) NA)}
+  }
+  dist_sp_1k$days_to_rec <- as.numeric(target_date) - 
+    as.numeric(dist_sp_1k$last_record_date)
+  dist_sp_1k$years_to_rec <- dist_sp_1k$days_to_rec/365
   
+  p_hist_time_since_rec_1k <- tryCatch({ggplot(data = dist_sp_1k, 
+                                               aes(x = years_to_rec)) + 
+      geom_histogram() + 
+      xlab("Years since last record") + 
+      ylab("Number of 1km grid cells") + 
+      theme_bw() + 
+      theme(text = element_text(size = t_size*1.2))}, 
+      error = function(x) NA)
+  
+  p_time_since_rec_1k <- tryCatch({ggplot() + 
+      geom_raster(data = dist_sp_1k, 
+                  aes(x = eastings, y = northings, fill = years_to_rec)) + 
+      coord_fixed(c_f) + 
+      scale_fill_gradient(name = "Years\nsince\nlast\nrecord\n", 
+                          trans = "reverse") + 
+      geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+      geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+      geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+                   arrow = arrow(length = unit(0.1, "npc"))) + 
+      ggtitle("Time since last record") + 
+      theme_bw() + 
+      theme(text = element_text(size = t_size*1.2), 
+            axis.title = element_blank(),
+            axis.text = element_blank(), 
+            axis.ticks = element_blank(), 
+            strip.text = element_text(hjust = -0.01), 
+            legend.key.width = unit(1.8*t_size, "points"))}, 
+      error = function(x) NA)
 }
 
 ### end time since last record ------------------------------------------------
@@ -620,19 +662,4 @@ try(ggsave("time_since_last_record_hist.jpg", p_hist_time_since_rec,
            width = 25, height = 25, units = "cm", device = "jpeg"))
 
 
-
-# ## alternately, save jpgs individually
-# try(ggsave("winter_spatial_distance.jpg", p_season_winter, 
-#            width = 25, height = 25, units = "cm", 
-#            device = "jpg"))
-# try(ggsave("spring_spatial_distance.jpg", p_season_spring, 
-#            width = 25, height = 25, units = "cm", 
-#            device = "jpg"))
-# try(ggsave("summer_spatial_distance.jpg", p_season_summer, 
-#            width = 25, height = 25, units = "cm", 
-#            device = "jpg"))
-# try(ggsave("fall_spatial_distance.jpg", p_season_autumn, 
-#            width = 25, height = 25, units = "cm", 
-#            device = "jpg"))
-
-save.image("millipede_maps_sonic_test_8Jan2020.RData")
+save.image("millipede_maps_sonic.RData")
