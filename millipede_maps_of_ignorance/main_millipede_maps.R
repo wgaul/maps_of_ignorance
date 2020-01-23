@@ -12,7 +12,9 @@
 ## last modified: 10 Jan 2020
 #################################
 dbg <- F
-calc_1k_distances <- T # run distances for 1km grid (might take a long time)
+calc_1k_distances <- F # run distances for 1km grid (might take a long time)
+fit_SDM <- T
+set.seed(23012020) # 23 Jan 2020
 
 library(wgutil)
 library(Hmisc)
@@ -26,15 +28,17 @@ library(parallel)
 #library(sf) # can't install sf on sonic as of 8 Jan 2020
 library(fasterize)
 library(rgdal)
+library(dismo)
 #library(rgeos)
 library(lubridate)
 library(tidyverse)
 
 source("functions_maps_of_ignorance.R")
 
-n_cores <- 3
+n_cores <- 1
 
 source("prepare_data.R")
+if(fit_SDM) {source("fit_SDM.R")}
 
 # tp <- sample(1:nrow(mill), size = 600) # test points - subset of records for testing
 tp <- 1:nrow(mill)
