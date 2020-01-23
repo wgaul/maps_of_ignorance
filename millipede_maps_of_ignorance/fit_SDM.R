@@ -75,19 +75,19 @@ fit_brt <- function(test_fold, fold_index, sp_df, pred_names) {
   mod <- tryCatch(gbm.step(data = sp_df[fold_index != test_fold], 
                            gbm.x = which(colnames(sp_df) %in% pred_names), 
                            gbm.y = "Julus scandinavius", 
-                           tree.complexity = 5, learning.rate = 0.005, 
-                           n.trees = 500, step.size = 100,
-                           family = "bernoulli", max.trees = 10000, plot.main = F), 
+                           tree.complexity = 3, learning.rate = 0.01, 
+                           n.trees = 500, step.size = 500,
+                           family = "bernoulli", max.trees = 2000, plot.main = F), 
                   error = function(x) NA)
   
   # make predictions for measuring AUC (predict only to data subset used for 
-  # overall model trainign)
+  # overall model training)
   f_pred <- tryCatch(predict(f_m, newdata = sp_df[fold_index == test_fold, ], 
                              type = "response",
                              n.trees = f_m$gbm.call$best.trees), 
                      error = function(x) NA)
   f_auc <- tryCatch(
-    roc(response = factor(sp_df[fold_index == test_fold, "plantago_presence"], 
+    roc(response = factor(sp_df[fold_index == test_fold, "Julus scandinavius"], 
                           levels = c("0", "1")),
         predictor = f_pred,
         auc = T)$auc[1], 
@@ -123,3 +123,6 @@ J_scand_brt_fits <- mclapply(1:5, FUN = fit_brt,
                              mc.cores = n_cores)
 
 ### end fit brt ---------------------------------------------------------------
+
+J_scand_preds <- bind_rows(lapply(J_scand_brt_fits, 
+                        FUN = function(x) {x$predictions}))
