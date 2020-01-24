@@ -13,9 +13,11 @@
 #################################
 dbg <- F
 calc_1k_distances <- F # run distances for 1km grid (might take a long time)
-fit_SDM <- T
 seed <- 23012020  # 23 Jan 2020
 set.seed(seed) 
+
+fit_brt <- F
+fit_rf <- T
 
 library(wgutil)
 library(Hmisc)
@@ -39,11 +41,11 @@ source("functions_maps_of_ignorance.R")
 n_cores <- 1
 
 source("prepare_data.R")
+source("prepare_objects_for_SDM.R")
 
-if(fit_SDM) {
-  source("prepare_objects_for_SDM.R")
-  source("fit_SDM.R")
-  }
+if(fit_rf) source("fit_rf.R")
+if(fit_brt) source("fit_brt.R")
+
 
 # tp <- sample(1:nrow(mill), size = 600) # test points - subset of records for testing
 tp <- 1:nrow(mill)

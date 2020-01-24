@@ -10,6 +10,8 @@
 ##############################
 library(dismo)
 set.seed(01242020) # Jan 24 2020
+n_cores <- 5
+on_sonic <- T
 
 # load objects that are needed to fit SDMs
 J_scand <- readRDS("J_scand.rds")
@@ -33,9 +35,9 @@ fit_brt <- function(test_fold, fold_index, sp_df, pred_names) {
   
   # make predictions for measuring AUC (predict only to data subset used for 
   # overall model training)
-  f_pred <- tryCatch(predict(f_m, newdata = sp_df[fold_index == test_fold, ], 
+  f_pred <- tryCatch(predict(mod, newdata = sp_df[fold_index == test_fold, ], 
                              type = "response",
-                             n.trees = f_m$gbm.call$best.trees), 
+                             n.trees = mod$gbm.call$best.trees), 
                      error = function(x) NA)
   f_auc <- tryCatch(
     roc(response = factor(sp_df[fold_index == test_fold, "Julus scandinavius"], 
@@ -47,14 +49,14 @@ fit_brt <- function(test_fold, fold_index, sp_df, pred_names) {
   # make dataframe of predictions with standardized recording effort
   newdata <- newdata[fold_index == test_fold, ]
   # make predictions to all grid cells in test_df
-  f_pred <- tryCatch(predict(f_m, newdata = newdata, 
+  f_pred <- tryCatch(predict(mod, newdata = newdata, 
                              type = "response",
-                             n.trees = f_m$gbm.call$best.trees), 
+                             n.trees = mod$gbm.call$best.trees), 
                      error = function(x) NA)
   
   newdata$pred <- tryCatch(f_pred, error = function(x) NA)
   # return fitted model, AUC value, and predictions for this model
-  tryCatch(list(m = f_m, auc = f_auc, predictions = newdata), 
+  tryCatch(list(m = mod, auc = f_auc, predictions = newdata), 
            error = function(x) "No list exported from fit_brt.")
 }
 
@@ -70,3 +72,5 @@ J_scand_brt_fits <- mclapply(1:5, FUN = fit_brt,
 
 J_scand_preds <- bind_rows(lapply(J_scand_brt_fits, 
                         FUN = function(x) {x$predictions}))
+
+if(on_sonic) quit(save = "no")

@@ -13,6 +13,7 @@
 ## last modified: 24 Jan 2020
 ##############################
 library(blockCV)
+library(sf)
 
 # For now, just fit a single environmental SDM and a single coordinates + survey
 # effort SDM to Julius scandinavius to see how it looks
@@ -30,24 +31,13 @@ mill_wide <- mill_fewer_vars %>%
   spread(Genus_species, value = observed, fill = 0) %>%
   select(-RecordId) %>%
   group_by(checklist_ID) %>%
-  summarise_at(vars("Adenomeris gibbosa":"Thalassisobates littoralis"), sum)
-
-# get dataset of just Julus scandinavius detection/non-detection and predictor
-# variables
-J_scand <- select(mill_wide, -("Adenomeris gibbosa":"Glomeris marginata"), 
-                  -c("Leptoiulus belgicus":"Thalassisobates littoralis")) %>%
+  summarise_at(vars("Adenomeris gibbosa":"Thalassisobates littoralis"), sum) %>%
   left_join(mill_fewer_vars[, colnames(mill_fewer_vars) %nin% 
-                              c("Genus_species", "RecordId")], 
-            by = "checklist_ID") %>%
-  distinct()
-
-# make J. scandinavius data spatial
-J_scand_spat <- SpatialPointsDataFrame(
-  coords = J_scand[, c("eastings", "northings")], 
-  data = J_scand, 
-  proj4string = CRS("+init=epsg:29903"))
-# make sure millipede data is in same projection as predictor data
-J_scand_spat <- spTransform(J_scand_spat, raster::projection(pred_brick))
+                                            c("RecordId", "StartDate", "EndDate",
+                                              "SiteName", "GridReference", 
+                                              "Latitude", "Longitude", 
+                                              "Precision")], 
+            by = "checklist_ID")
 
 
 ### Make spatial block CV folds ------------------------------------------------
@@ -56,15 +46,21 @@ spatialAutoRange(pred_brick, sampleNumber = 1000,
                  nCores = 3, showPlots = TRUE, plotVariograms = TRUE)
 
 # make spatial blocks 
-block_mill_10k <- spatialBlock(J_scand_spat, 
-                               theRange = 90000, 
+block_mill_10k <- spatialBlock(mill_spat, 
+                               theRange = 100000, 
                                k = 5, 
                                selection = "random", 
                                iteration = 5, 
                                showBlocks = TRUE, 
                                rasterLayer = pred_brick$pasture_l2, 
                                biomod2Format = FALSE)
-fold_index_10k <- block_mill_10k$foldID
+
+mill_wide <- SpatialPointsDataFrame(
+  coords = mill_wide[, c("eastings", "northings")], 
+  data = mill_wide, proj4string = CRS("+init=epsg:29903"))
+mill_wide <- st_join(st_as_sf(mill_wide), st_as_sf(block_mill_10k$blocks))
+mill_wide <- data.frame(mill_wide)
+mill_wide <- select(mill_wide, -Easting, -Northing, -geometry, -layer)
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort
@@ -73,9 +69,23 @@ newdata <- cbind(hec_names,
                                             df = TRUE, 
                                             method = "simple", 
                                             cellnumbers = TRUE)))
-newdata$list_length <- 10
+newdata <- SpatialPointsDataFrame(coords = newdata[, c("eastings", "northings")], 
+                                  data = newdata, 
+                                  proj4string = CRS("+init=epsg:29903"))
+newdata <- st_join(st_as_sf(newdata), st_as_sf(block_mill_10k$blocks))
+
+newdata_temp <- data.frame(newdata)
+newdata_temp <- select(newdata_temp, -Easting, -Northing, -geometry, -layer)
+
+newdata <- data.frame()
+
+for(i in 1:182) {
+  dt <- newdata_temp
+  dt$day_of_year <- i*2
+  newdata <- bind_rows(newdata, dt)
+}
+newdata$list_length <- 4
 
 ### save objects for use on sonic ---------------------------------------------
-saveRDS(J_scand, "J_scand.rds")
-saveRDS(fold_index_10k, "fold_index_10k.rds")
+saveRDS(mill_wide, "mill_wide.rds")
 saveRDS(newdata, "newdata.rds")
