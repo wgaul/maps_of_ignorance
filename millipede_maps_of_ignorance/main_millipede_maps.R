@@ -9,12 +9,13 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 10 Jan 2020
+## last modified: 24 Jan 2020
 #################################
 dbg <- F
 calc_1k_distances <- F # run distances for 1km grid (might take a long time)
 fit_SDM <- T
-set.seed(23012020) # 23 Jan 2020
+seed <- 23012020  # 23 Jan 2020
+set.seed(seed) 
 
 library(wgutil)
 library(Hmisc)
@@ -38,7 +39,11 @@ source("functions_maps_of_ignorance.R")
 n_cores <- 1
 
 source("prepare_data.R")
-if(fit_SDM) {source("fit_SDM.R")}
+
+if(fit_SDM) {
+  source("prepare_objects_for_SDM.R")
+  source("fit_SDM.R")
+  }
 
 # tp <- sample(1:nrow(mill), size = 600) # test points - subset of records for testing
 tp <- 1:nrow(mill)
