@@ -46,6 +46,8 @@ Thumbs.db
 *.Rdata
 *.rds
 *.tif
+*.jpg
+*.pdf
 *.Rproj
 *.grd
 *.gri

@@ -10,6 +10,8 @@
 ##############################
 library(randomForest)
 library(pROC)
+library(parallel)
+library(tidyverse)
 set.seed(01242020) # Jan 24 2020
 on_sonic <- F
 n_cores <- 2
@@ -147,23 +149,33 @@ env_rf_fits <- mclapply(sp_to_fit,
 
 # view AUC (averaged over 5 folds)
 lapply(spatial_rf_fits, 
-            FUN = function(x) {mean(sapply(x, FUN = function(y) {y$auc}), 
-                                    na.rm = T)})
+            FUN = function(x) {mean(sapply(x, FUN = function(y) {
+              tryCatch(y$auc, error = function(x) NA)}), 
+              na.rm = T)})
 lapply(env_rf_fits, 
-       FUN = function(x) {mean(sapply(x, FUN = function(y) {y$auc}), 
-                               na.rm = T)})
+       FUN = function(x) {mean(sapply(x, FUN = function(y) {
+         tryCatch(y$auc, error = function(x) NA)}), 
+         na.rm = T)})
 
 # Get predictions with standardized survey effort
 mill_predictions_spatial_rf <- lapply(
   spatial_rf_fits, 
-  FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(x) x$predictions))
+  FUN = function(x) {lapply(x, FUN = function(x) {
+    tryCatch(x$predictions, error = function(x) NA)})
   })
+mill_predictions_spatial_rf <- lapply(
+  mill_predictions_spatial_rf, 
+  FUN = function(x) {
+    bind_rows(x[!is.na(x)])})
+
 mill_predictions_env_rf <- lapply(
   env_rf_fits, 
+  FUN = function(x) {lapply(x, FUN = function(x) {
+    tryCatch(x$predictions, error = function(x) NA)})})
+mill_predictions_env_rf <- lapply(
+  mill_predictions_env_rf, 
   FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(x) x$predictions))
-  })
+    bind_rows(x[!is.na(x)])})
 
 # get variable importance (averaged over 5 folds) 
 mill_var_imp_spatial_rf <- lapply(
@@ -205,8 +217,11 @@ for(i in 1:length(mill_predictions_spatial_rf)) {
   print(ggplot() + 
     geom_tile(data = mill_predictions_spatial_rf[[i]], 
               aes(x = eastings, y = northings, fill = mean_prediction)) + 
-  # geom_point(data = J_scand, aes(x = eastings, y = northings, 
-  #                                color = factor("Julus scandinavius"))) + 
+      geom_point(data = mill, aes(x = eastings, y = northings),
+                 color = "light grey", size = 0.5) +
+      geom_point(data = mill[mill$Genus_species ==
+                               names(mill_predictions_env_rf)[i], ],
+                 aes(x = eastings, y = northings), color = "orange") +
     ggtitle(paste0(names(mill_predictions_spatial_rf)[i], 
                    " - spatial model"))
   )
@@ -225,11 +240,11 @@ for(i in 1:length(mill_predictions_env_rf)) {
   print(ggplot() + 
           geom_tile(data = mill_predictions_env_rf[[i]], 
                     aes(x = eastings, y = northings, fill = mean_prediction)) + 
-          # geom_point(data = mill, aes(x = eastings, y = northings),
-          #            color = "light grey", size = 0.5) +
-          # geom_point(data = mill[mill$Genus_species ==
-          #                          names(mill_predictions_env_rf)[i], ],
-          #            aes(x = eastings, y = northings), color = "orange") +
+          geom_point(data = mill, aes(x = eastings, y = northings),
+                     color = "light grey", size = 0.5) +
+          geom_point(data = mill[mill$Genus_species ==
+                                   names(mill_predictions_env_rf)[i], ],
+                     aes(x = eastings, y = northings), color = "orange") +
           ggtitle(paste0(names(mill_predictions_env_rf)[i], 
                          " - environmental model"))
   )

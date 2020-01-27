@@ -9,6 +9,8 @@
 ## last modified: 24 Jan 2020
 ##############################
 library(dismo)
+library(parallel)
+library(dplyr)
 set.seed(01242020) # Jan 24 2020
 n_cores <- 5
 on_sonic <- T
@@ -72,5 +74,8 @@ J_scand_brt_fits <- mclapply(1:5, FUN = fit_brt,
 
 J_scand_preds <- bind_rows(lapply(J_scand_brt_fits, 
                         FUN = function(x) {x$predictions}))
+try(dim(J_scand_preds))
+try(head(J_scand_preds))
+saveRDS(J_scand_preds, "J_scand_preds.rds")
 
 if(on_sonic) quit(save = "no")

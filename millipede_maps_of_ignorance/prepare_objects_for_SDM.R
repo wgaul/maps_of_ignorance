@@ -48,7 +48,7 @@ spatialAutoRange(pred_brick, sampleNumber = 1000,
 # make spatial blocks 
 block_mill_10k <- spatialBlock(mill_spat, 
                                theRange = 100000, 
-                               k = 5, 
+                               k = 3, 
                                selection = "random", 
                                iteration = 5, 
                                showBlocks = TRUE, 
