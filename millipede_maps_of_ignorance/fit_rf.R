@@ -6,7 +6,7 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 24 Jan 2020
+## last modified: 28 Jan 2020
 ##############################
 library(randomForest)
 library(pROC)
@@ -40,14 +40,14 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
   # mtry values to test - default, half that, and twice that
   mtry_tests <- c(ceiling(sqrt(nvar)/2), ceiling(sqrt(nvar)), 
                   ceiling(sqrt(nvar)*2)) 
-  stop("Does this fit with all data (all folds) right now?")
+
   for(k in 1:length(mtry_tests)) {
     m_k <- tryCatch(randomForest(
-      x = sp_df[, colnames(sp_df) %in% pred_names],
-      y = factor(sp_df[, colnames(sp_df) == sp_name]),
-      ntree = 2000, 
+      x = sp_df[sp_df$folds != test_fold, colnames(sp_df) %in% pred_names],
+      y = factor(sp_df[sp_df$folds != test_fold, colnames(sp_df) == sp_name]),
+      ntree = 1000, 
       mtry = mtry_tests[k], 
-      nodesize = 1, 
+      nodesize = 3, 
       replace = TRUE, classwt = NULL, 
       importance = FALSE, 
       keep.forest = FALSE), 
@@ -80,9 +80,9 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
   # importance if I want it (see manual linked in help documentation)
   mod <- tryCatch({
     randomForest(
-      x = sp_df[, which(colnames(sp_df) %in% pred_names)],
-      y = factor(sp_df[, which(colnames(sp_df) == sp_name)]),
-      ntree = 2000, 
+      x = sp_df[sp_df$folds != test_fold, which(colnames(sp_df) %in% pred_names)],
+      y = factor(sp_df[sp_df$folds != test_fold, which(colnames(sp_df) == sp_name)]),
+      ntree = 1000, 
       mtry = mtry_best, 
       nodesize = 1, 
       replace = TRUE, classwt = NULL, 
@@ -102,7 +102,6 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
     error = function(x) NA)
   
   # make dataframe of predictions with standardized recording effort
-  # make predictions to ALL grid cells (both test and training)
   newdata$pred[newdata$folds == test_fold] <- tryCatch(predict(
     mod, newdata = newdata[newdata$folds == test_fold, ], type = "prob")[, "1"], 
     error = function(x) NA)
@@ -120,9 +119,9 @@ call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names, ...) {
 }
 
 # fit spatial models
-sp_to_fit <- list("Julus scandinavius", "Glomeris marginata")
+sp_to_fit <- list("Tachypodoiulus niger", "Ommatoiulus sabulosus")
 # "Ophyiulus pilosus", "Blaniulus guttulatus", 
-# "Tachypodoiulus niger"
+# "Julus scandinavius", "Glomeris marginata", 
 
 names(sp_to_fit) <- sp_to_fit
 spatial_rf_fits <- mclapply(sp_to_fit, 
@@ -132,6 +131,9 @@ spatial_rf_fits <- mclapply(sp_to_fit,
                                            "day_of_year", 
                                            "list_length"), 
                             mc.cores = n_cores)
+try(print(pryr::object_size(spatial_rf_fits)))
+try(saveRDS(spatial_rf_fits, "spatial_rf_fits.rds"))
+
 # fit environmental model
 env_rf_fits <- mclapply(sp_to_fit, 
                         FUN = call_fit_rf, 
@@ -144,7 +146,8 @@ env_rf_fits <- mclapply(sp_to_fit,
                                        "day_of_year", 
                                        "list_length"), 
                         mc.cores = n_cores)
-
+try(print(pryr::object_size(env_rf_fits)))
+try(saveRDS(env_rf_fits, "env_rf_fits.rds"))
 ### end fit random forest ----------------------------------------------------
 
 # view AUC (averaged over 5 folds)
@@ -160,7 +163,7 @@ lapply(env_rf_fits,
 # Get predictions with standardized survey effort
 mill_predictions_spatial_rf <- lapply(
   spatial_rf_fits, 
-  FUN = function(x) {lapply(x, FUN = function(x) {
+  FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
     tryCatch(x$predictions, error = function(x) NA)})
   })
 mill_predictions_spatial_rf <- lapply(
@@ -170,7 +173,7 @@ mill_predictions_spatial_rf <- lapply(
 
 mill_predictions_env_rf <- lapply(
   env_rf_fits, 
-  FUN = function(x) {lapply(x, FUN = function(x) {
+  FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
     tryCatch(x$predictions, error = function(x) NA)})})
 mill_predictions_env_rf <- lapply(
   mill_predictions_env_rf, 
@@ -181,7 +184,7 @@ mill_predictions_env_rf <- lapply(
 mill_var_imp_spatial_rf <- lapply(
   spatial_rf_fits, 
   FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(y) {
+    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
       df <- data.frame(y$m$importance)
       df$variable <- rownames(df)
       df[, c("variable", "MeanDecreaseGini")]}))}
@@ -189,7 +192,7 @@ mill_var_imp_spatial_rf <- lapply(
 mill_var_imp_env_rf <- lapply(
   env_rf_fits, 
   FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(y) {
+    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
       df <- data.frame(y$m$importance)
       df$variable <- rownames(df)
       df[, c("variable", "MeanDecreaseGini")]}))}

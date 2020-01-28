@@ -32,12 +32,15 @@ mill_wide <- mill_fewer_vars %>%
   select(-RecordId) %>%
   group_by(checklist_ID) %>%
   summarise_at(vars("Adenomeris gibbosa":"Thalassisobates littoralis"), sum) %>%
-  left_join(mill_fewer_vars[, colnames(mill_fewer_vars) %nin% 
+  left_join(., mill_fewer_vars[, colnames(mill_fewer_vars) %nin% 
                                             c("RecordId", "StartDate", "EndDate",
                                               "SiteName", "GridReference", 
                                               "Latitude", "Longitude", 
+                                              "Precision", 
+                                              "Genus_species", 
                                               "Precision")], 
-            by = "checklist_ID")
+            by = "checklist_ID") %>%
+  unique()
 
 
 ### Make spatial block CV folds ------------------------------------------------

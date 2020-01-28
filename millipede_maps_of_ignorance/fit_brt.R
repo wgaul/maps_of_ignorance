@@ -6,21 +6,22 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 24 Jan 2020
+## last modified: 28 Jan 2020
 ##############################
 library(dismo)
 library(pROC)
 library(parallel)
 library(dplyr)
+library(tibble)
 set.seed(01242020) # Jan 24 2020
-n_cores <- 5
+n_cores <- 1
 on_sonic <- T
 
 # load objects that are needed to fit SDMs
 mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
 
-### fit random forest ---------------------------------------------------------
+### fit boosted regression tree -----------------------------------------------
 fit_brt <- function(test_fold, sp_name, sp_df, pred_names) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
   #       sp_name - character string giving the name of the column with 
@@ -28,19 +29,21 @@ fit_brt <- function(test_fold, sp_name, sp_df, pred_names) {
   #       sp_df - data frame with species observations and a column called 
   #               "folds" giving the cross-validation folds each record is in
   #       pred_names - character vector giving the variables to use as predictors
-  browser()
+
   if(is_tibble(sp_df)) {
     sp_df <- data.frame(sp_df)
   }
   sp_name <- gsub(" ", ".", sp_name)
   colnames(sp_df) <- gsub(" ", ".", colnames(sp_df))
   
+  sp_df[sp_df[, sp_name] > 1, sp_name] <- 1 
+  
   # fit boosted regression tree
   mod <- tryCatch(gbm.step(data = sp_df[sp_df$folds != test_fold, ], 
                            gbm.x = which(colnames(sp_df) %in% pred_names), 
                            gbm.y = sp_name, 
-                           tree.complexity = 3, learning.rate = 0.01, 
-                           n.trees = 500, step.size = 500,
+                           tree.complexity = 3, learning.rate = 0.005, 
+                           n.trees = 500, step.size = 100,
                            family = "bernoulli", max.trees = 1000,
                            plot.main = F), 
                   error = function(x) NA)
@@ -144,18 +147,18 @@ mill_predictions_env_brt <- lapply(
 mill_var_imp_spatial_brt <- lapply(
   spatial_brt_fits, 
   FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(y) {
-      df <- data.frame(y$m$importance)
+    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
+      df <- data.frame(y$m$contributions)
       df$variable <- rownames(df)
-      df[, c("variable", "MeanDecreaseGini")]}))}
+      df[, c("variable", "rel.inf")]}))}
 )
 mill_var_imp_env_brt <- lapply(
   env_brt_fits, 
   FUN = function(x) {
-    bind_rows(lapply(x, FUN = function(y) {
-      df <- data.frame(y$m$importance)
+    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
+      df <- data.frame(y$m$contributions)
       df$variable <- rownames(df)
-      df[, c("variable", "MeanDecreaseGini")]}))}
+      df[, c("variable", "rel.inf")]}))}
 )
 
 
@@ -220,12 +223,12 @@ if(!on_sonic) {
   mill_var_imp_spatial_brt <- lapply(
     mill_var_imp_spatial_brt, FUN= function(x) {
       group_by(x, variable) %>%
-        summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
+        summarise(mean_rel.inf = mean(rel.inf))
     })
   mill_var_imp_env_brt <- lapply(
     mill_var_imp_env_brt, FUN= function(x) {
       group_by(x, variable) %>%
-        summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
+        summarise(mean_rel.inf = mean(rel.inf))
     })
   
   for(i in 1:length(mill_var_imp_spatial_brt)) {
@@ -238,13 +241,23 @@ if(!on_sonic) {
     )
   }
   
-  for(i in 1:length(mill_var_imp_env_brt)) {
+  for(i in 1:length(mill_var_imp_spatial_brt)) {
+    print(ggplot(data = mill_var_imp_spatial_brt[[i]], 
+                 aes(x = variable, y = mean_rel.inf)) + 
+            geom_bar(stat = "identity") + 
+            coord_flip() + 
+            ggtitle(paste0(names(mill_var_imp_spatial_brt)[i], 
+                           " - spatial model"))
+    )
+  }
+  
+  for(i in 1:length(mill_var_imp_spatial_brt)) {
     print(ggplot(data = mill_var_imp_env_brt[[i]], 
-                 aes(x = variable, y = MeanDecreaseGini)) + 
+                 aes(x = variable, y = mean_rel.inf)) + 
             geom_bar(stat = "identity") + 
             coord_flip() + 
             ggtitle(paste0(names(mill_var_imp_env_brt)[i], 
-                           " - spatial model"))
+                           " - environmental model"))
     )
   }
 }
