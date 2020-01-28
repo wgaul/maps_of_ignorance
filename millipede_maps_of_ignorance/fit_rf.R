@@ -196,8 +196,8 @@ mill_var_imp_env_rf <- lapply(
 )
 
 # save results
-saveRDS(mill_predictions_spatial_rf, "mill_predictions_spatial_rf.rds")
-saveRDS(mill_predictions_env_rf, "mill_predictions_env_rf.rds")
+try(saveRDS(mill_predictions_spatial_rf, "mill_predictions_spatial_rf.rds"))
+try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_rf.rds"))
 
 
 

@@ -90,6 +90,9 @@ spatial_brt_fits <- mclapply(sp_to_fit,
                                            "day_of_year", 
                                            "list_length"), 
                             mc.cores = n_cores)
+try(print(pryr::object_size(spatial_brt_fits)))
+try(saveRDS(spatial_brt_fits, "spatial_brt_fits.rds"))
+
 ## fit environmental model
 env_brt_fits <- mclapply(sp_to_fit, 
                          FUN = call_fit_brt, 
@@ -102,7 +105,10 @@ env_brt_fits <- mclapply(sp_to_fit,
                                         "day_of_year", 
                                         "list_length"), 
                          mc.cores = n_cores)
+try(print(pryr::object_size(env_brt_fits)))
+try(saveRDS(env_brt_fits, "env_brt_fits.rds"))
 ### end fit brt ---------------------------------------------------------------
+
 
 # view AUC (averaged over 5 folds)
 lapply(spatial_brt_fits, 
@@ -154,8 +160,8 @@ mill_var_imp_env_brt <- lapply(
 
 
 # save results
-saveRDS(mill_predictions_spatial_brt, "mill_predictions_spatial_brt.rds")
-saveRDS(mill_predictions_env_brt, "mill_predictions_env_brt.rds")
+try(saveRDS(mill_predictions_spatial_brt, "mill_predictions_spatial_brt.rds"))
+try(saveRDS(mill_predictions_env_brt, "mill_predictions_env_brt.rds"))
 
 
 
