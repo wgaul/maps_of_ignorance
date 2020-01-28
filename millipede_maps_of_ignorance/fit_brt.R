@@ -9,6 +9,7 @@
 ## last modified: 24 Jan 2020
 ##############################
 library(dismo)
+library(pROC)
 library(parallel)
 library(dplyr)
 set.seed(01242020) # Jan 24 2020
@@ -16,66 +17,230 @@ n_cores <- 5
 on_sonic <- T
 
 # load objects that are needed to fit SDMs
-J_scand <- readRDS("J_scand.rds")
-fold_index_10k <- readRDS("fold_index_10k.rds")
+mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
 
-### fit boosted regression tree -----------------------------------------------
-fit_brt <- function(test_fold, fold_index, sp_df, pred_names) {
+### fit random forest ---------------------------------------------------------
+fit_brt <- function(test_fold, sp_name, sp_df, pred_names) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
-  #       fold_index - integer vector saying which CV fold each row of sp_df 
-  #                     belongs in
-  #       sp_df - data frame with species observations
+  #       sp_name - character string giving the name of the column with 
+  #                 detection/non-detection data to use
+  #       sp_df - data frame with species observations and a column called 
+  #               "folds" giving the cross-validation folds each record is in
   #       pred_names - character vector giving the variables to use as predictors
-  mod <- tryCatch(gbm.step(data = sp_df[fold_index != test_fold], 
+  browser()
+  if(is_tibble(sp_df)) {
+    sp_df <- data.frame(sp_df)
+  }
+  sp_name <- gsub(" ", ".", sp_name)
+  colnames(sp_df) <- gsub(" ", ".", colnames(sp_df))
+  
+  # fit boosted regression tree
+  mod <- tryCatch(gbm.step(data = sp_df[sp_df$folds != test_fold, ], 
                            gbm.x = which(colnames(sp_df) %in% pred_names), 
-                           gbm.y = "Julus scandinavius", 
+                           gbm.y = sp_name, 
                            tree.complexity = 3, learning.rate = 0.01, 
                            n.trees = 500, step.size = 500,
-                           family = "bernoulli", max.trees = 2000, plot.main = F), 
+                           family = "bernoulli", max.trees = 1000,
+                           plot.main = F), 
                   error = function(x) NA)
-  
+
   # make predictions for measuring AUC (predict only to data subset used for 
   # overall model training)
-  f_pred <- tryCatch(predict(mod, newdata = sp_df[fold_index == test_fold, ], 
+  f_pred <- tryCatch(predict(mod, newdata = sp_df[sp_df$fold == test_fold, ], 
                              type = "response",
                              n.trees = mod$gbm.call$best.trees), 
                      error = function(x) NA)
   f_auc <- tryCatch(
-    roc(response = factor(sp_df[fold_index == test_fold, "Julus scandinavius"], 
+    roc(response = factor(sp_df[sp_df$folds == test_fold, sp_name], 
                           levels = c("0", "1")),
-        predictor = f_pred,
-        auc = T)$auc[1], 
+        predictor = f_pred, auc = T), 
     error = function(x) NA)
   
   # make dataframe of predictions with standardized recording effort
-  newdata <- newdata[fold_index == test_fold, ]
-  # make predictions to all grid cells in test_df
-  f_pred <- tryCatch(predict(mod, newdata = newdata, 
-                             type = "response",
-                             n.trees = mod$gbm.call$best.trees), 
-                     error = function(x) NA)
+  newdata$pred[newdata$folds == test_fold] <- tryCatch({
+    predict(mod, newdata = newdata[newdata$folds == test_fold, ], 
+            type = "response", n.trees = mod$gbm.call$best.trees)}, 
+    error = function(x) NA)
   
-  newdata$pred <- tryCatch(f_pred, error = function(x) NA)
   # return fitted model, AUC value, and predictions for this model
-  tryCatch(list(m = mod, auc = f_auc, predictions = newdata), 
+  tryCatch(list(m = mod, auc = f_auc$auc[1], predictions = newdata, 
+                roc_object = f_auc), 
            error = function(x) "No list exported from fit_brt.")
 }
 
-# fit model
-J_scand_brt_fits <- mclapply(1:5, FUN = fit_brt, 
-                             fold_index = fold_index_10k, 
-                             sp_df = J_scand, 
-                             pred_names = c("eastings", "northings", 
-                                            "list_length"), 
-                             mc.cores = n_cores)
+call_fit_brt <- function(sp_name, test_fold, sp_df, pred_names, ...) {
+  # Function to call fit_rf on each species in a list of species dfs
+  lapply(1:5, FUN = fit_brt, sp_name = sp_name, 
+         sp_df = sp_df, pred_names = pred_names)
+}
 
+
+
+## fit spatial models
+sp_to_fit <- list("Glomeris marginata")
+# "Ophyiulus pilosus", "Blaniulus guttulatus", 
+# "Tachypodoiulus niger", "Julus scandinavius", 
+
+names(sp_to_fit) <- sp_to_fit
+spatial_brt_fits <- mclapply(sp_to_fit, 
+                            FUN = call_fit_brt, 
+                            sp_df = mill_wide, 
+                            pred_names = c("eastings", "northings", 
+                                           "day_of_year", 
+                                           "list_length"), 
+                            mc.cores = n_cores)
+## fit environmental model
+env_brt_fits <- mclapply(sp_to_fit, 
+                         FUN = call_fit_brt, 
+                         sp_df = mill_wide, 
+                         pred_names = c("mean_tn", "mean_tx", 
+                                        "mean_rr", "artificial_surfaces", 
+                                        "forest_seminatural_l1", 
+                                        "wetlands_l1", "pasture_l2", 
+                                        "arable_l2", "elev", 
+                                        "day_of_year", 
+                                        "list_length"), 
+                         mc.cores = n_cores)
 ### end fit brt ---------------------------------------------------------------
 
-J_scand_preds <- bind_rows(lapply(J_scand_brt_fits, 
-                        FUN = function(x) {x$predictions}))
-try(dim(J_scand_preds))
-try(head(J_scand_preds))
-saveRDS(J_scand_preds, "J_scand_preds.rds")
+# view AUC (averaged over 5 folds)
+lapply(spatial_brt_fits, 
+       FUN = function(x) {mean(sapply(x, FUN = function(y) {
+         tryCatch(y$auc, error = function(x) NA)}), 
+         na.rm = T)})
+lapply(env_brt_fits, 
+       FUN = function(x) {mean(sapply(x, FUN = function(y) {
+         tryCatch(y$auc, error = function(x) NA)}), 
+         na.rm = T)})
+
+# Get predictions with standardized survey effort
+mill_predictions_spatial_brt <- lapply(
+  spatial_brt_fits, 
+  FUN = function(x) {lapply(x, FUN = function(x) {
+    tryCatch(x$predictions, error = function(x) NA)})
+  })
+mill_predictions_spatial_brt <- lapply(
+  mill_predictions_spatial_brt, 
+  FUN = function(x) {
+    bind_rows(x[!is.na(x)])})
+
+mill_predictions_env_brt <- lapply(
+  env_brt_fits, 
+  FUN = function(x) {lapply(x, FUN = function(x) {
+    tryCatch(x$predictions, error = function(x) NA)})})
+mill_predictions_env_brt <- lapply(
+  mill_predictions_env_brt, 
+  FUN = function(x) {
+    bind_rows(x[!is.na(x)])})
+
+# get variable importance (averaged over 5 folds) 
+mill_var_imp_spatial_brt <- lapply(
+  spatial_brt_fits, 
+  FUN = function(x) {
+    bind_rows(lapply(x, FUN = function(y) {
+      df <- data.frame(y$m$importance)
+      df$variable <- rownames(df)
+      df[, c("variable", "MeanDecreaseGini")]}))}
+)
+mill_var_imp_env_brt <- lapply(
+  env_brt_fits, 
+  FUN = function(x) {
+    bind_rows(lapply(x, FUN = function(y) {
+      df <- data.frame(y$m$importance)
+      df$variable <- rownames(df)
+      df[, c("variable", "MeanDecreaseGini")]}))}
+)
+
+
+# save results
+saveRDS(mill_predictions_spatial_brt, "mill_predictions_spatial_brt.rds")
+saveRDS(mill_predictions_env_brt, "mill_predictions_env_brt.rds")
+
+
+
+
+### exploratory plotting - this is not for running on sonic
+if(!on_sonic) {
+  # plot average of predictions from all 5 folds (so 4 predictions will be to
+  # training data, one prediction to test data in each grid cell)
+  
+  # spatial model
+  mill_predictions_spatial_brt <- lapply(
+    mill_predictions_spatial_brt, FUN= function(x) {
+      group_by(x, hectad) %>%
+        summarise(mean_prediction = mean(pred, na.rm = T), 
+                  eastings = mean(eastings), northings = mean(northings))
+    })
+  
+  for(i in 1:length(mill_predictions_spatial_brt)) {
+    print(ggplot() + 
+            geom_tile(data = mill_predictions_spatial_brt[[i]], 
+                      aes(x = eastings, y = northings, fill = mean_prediction)) + 
+            geom_point(data = mill, aes(x = eastings, y = northings),
+                       color = "light grey", size = 0.5) +
+            geom_point(data = mill[mill$Genus_species ==
+                                     names(mill_predictions_env_brt)[i], ],
+                       aes(x = eastings, y = northings), color = "orange") +
+            ggtitle(paste0(names(mill_predictions_spatial_brt)[i], 
+                           " - spatial model"))
+    )
+  }
+  
+  
+  # environmental variables model
+  mill_predictions_env_brt <- lapply(
+    mill_predictions_env_brt, FUN= function(x) {
+      group_by(x, hectad) %>%
+        summarise(mean_prediction = mean(pred, na.rm = T), 
+                  eastings = mean(eastings), northings = mean(northings))
+    })
+  
+  for(i in 1:length(mill_predictions_env_brt)) {
+    print(ggplot() + 
+            geom_tile(data = mill_predictions_env_brt[[i]], 
+                      aes(x = eastings, y = northings, fill = mean_prediction)) + 
+            geom_point(data = mill, aes(x = eastings, y = northings),
+                       color = "light grey", size = 0.5) +
+            geom_point(data = mill[mill$Genus_species ==
+                                     names(mill_predictions_env_brt)[i], ],
+                       aes(x = eastings, y = northings), color = "orange") +
+            ggtitle(paste0(names(mill_predictions_env_brt)[i], 
+                           " - environmental model"))
+    )
+  }
+  
+  ## plot variable importance
+  mill_var_imp_spatial_brt <- lapply(
+    mill_var_imp_spatial_brt, FUN= function(x) {
+      group_by(x, variable) %>%
+        summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
+    })
+  mill_var_imp_env_brt <- lapply(
+    mill_var_imp_env_brt, FUN= function(x) {
+      group_by(x, variable) %>%
+        summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
+    })
+  
+  for(i in 1:length(mill_var_imp_spatial_brt)) {
+    print(ggplot(data = mill_var_imp_spatial_brt[[i]], 
+                 aes(x = variable, y = MeanDecreaseGini)) + 
+            geom_bar(stat = "identity") + 
+            coord_flip() + 
+            ggtitle(paste0(names(mill_var_imp_spatial_brt)[i], 
+                           " - spatial model"))
+    )
+  }
+  
+  for(i in 1:length(mill_var_imp_env_brt)) {
+    print(ggplot(data = mill_var_imp_env_brt[[i]], 
+                 aes(x = variable, y = MeanDecreaseGini)) + 
+            geom_bar(stat = "identity") + 
+            coord_flip() + 
+            ggtitle(paste0(names(mill_var_imp_env_brt)[i], 
+                           " - spatial model"))
+    )
+  }
+}
 
 if(on_sonic) quit(save = "no")

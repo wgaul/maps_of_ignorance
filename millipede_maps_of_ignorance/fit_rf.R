@@ -40,7 +40,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
   # mtry values to test - default, half that, and twice that
   mtry_tests <- c(ceiling(sqrt(nvar)/2), ceiling(sqrt(nvar)), 
                   ceiling(sqrt(nvar)*2)) 
-  
+  stop("Does this fit with all data (all folds) right now?")
   for(k in 1:length(mtry_tests)) {
     m_k <- tryCatch(randomForest(
       x = sp_df[, colnames(sp_df) %in% pred_names],
@@ -108,7 +108,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
     error = function(x) NA)
   # return fitted model, AUC value, and predictions for this model
   tryCatch(list(m = mod, auc = f_auc$auc[1], predictions = newdata, 
-                proc_object = f_auc), 
+                roc_object = f_auc), 
            error = function(x) "No list exported from fit_rf.")
 }
 
@@ -283,4 +283,3 @@ for(i in 1:length(mill_var_imp_env_rf)) {
 }
 
 if(on_sonic) quit(save = "no")
-
