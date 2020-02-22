@@ -108,6 +108,7 @@ env_brt_fits <- mclapply(sp_to_fit,
                                         "day_of_year", 
                                         "list_length"), 
                          mc.cores = n_cores)
+try(print(pryr::object_size(spatial_brt_fits)))
 try(print(pryr::object_size(env_brt_fits)))
 try(saveRDS(env_brt_fits, "env_brt_fits.rds"))
 ### end fit brt ---------------------------------------------------------------

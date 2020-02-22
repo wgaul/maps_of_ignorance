@@ -48,22 +48,40 @@ mill_wide <- mill_fewer_vars %>%
 spatialAutoRange(pred_brick, sampleNumber = 1000, 
                  nCores = 3, showPlots = TRUE, plotVariograms = TRUE)
 
-# make spatial blocks 
+# make spatial blocks for CV testing
 block_mill_10k <- spatialBlock(mill_spat, 
                                theRange = 100000, 
-                               k = 3, 
+                               k = n_folds, 
                                selection = "random", 
                                iteration = 5, 
                                showBlocks = TRUE, 
                                rasterLayer = pred_brick$pasture_l2, 
                                biomod2Format = FALSE)
+# make smaller blocks for spatial undersampling of test (and training) data
+block_subsamp_mill_10k <- spatialBlock(mill_spat, 
+                                       theRange = 30000, 
+                                       k = n_folds, 
+                                       selection = "random", 
+                                       iteration = 5, 
+                                       showBlocks = TRUE, 
+                                       rasterLayer = pred_brick$pasture_l2, 
+                                       biomod2Format = FALSE)
 
 mill_wide <- SpatialPointsDataFrame(
   coords = mill_wide[, c("eastings", "northings")], 
   data = mill_wide, proj4string = CRS("+init=epsg:29903"))
-mill_wide <- st_join(st_as_sf(mill_wide), st_as_sf(block_mill_10k$blocks))
+# add cv fold id
+mill_wide <- st_join(
+  st_as_sf(mill_wide), 
+  st_as_sf(block_mill_10k$blocks[, names(block_mill_10k$blocks) == "folds"]))
+# add spatial subsampling grid cell ID
+mill_wide <- st_join(
+  st_as_sf(mill_wide), 
+  st_as_sf(block_subsamp_mill_10k$blocks[, names(
+    block_subsamp_mill_10k$blocks) == "layer"]))
 mill_wide <- data.frame(mill_wide)
-mill_wide <- select(mill_wide, -Easting, -Northing, -geometry, -layer)
+colnames(mill_wide)[colnames(mill_wide) == "layer"] <- "spat_subsamp_cell"
+mill_wide <- select(mill_wide, -geometry)
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort

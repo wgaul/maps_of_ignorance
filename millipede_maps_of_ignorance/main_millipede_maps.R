@@ -18,6 +18,7 @@ set.seed(seed)
 
 fit_brt <- F
 fit_rf <- T
+n_folds <- 3
 
 library(wgutil)
 library(Hmisc)
@@ -38,7 +39,7 @@ library(tidyverse)
 
 source("functions_maps_of_ignorance.R")
 
-n_cores <- 1
+n_cores <- 2
 
 source("prepare_data.R")
 source("prepare_objects_for_SDM.R")

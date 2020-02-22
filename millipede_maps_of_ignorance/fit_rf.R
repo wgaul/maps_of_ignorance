@@ -4,9 +4,13 @@
 ## This script is meant to be sourced from within 'main_millipede_maps.R'.  It
 ## relies on the outputs from 'prepare_objects_for_SDM.R'
 ## 
+## TODO:  - make all testing be on spatially sub-sampled data (and use the
+##          same spatially sub-sampled dataset to test all models)
+##        - add list length model
+##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 28 Jan 2020
+## last modified: 22 Feb 2020
 ##############################
 library(randomForest)
 library(pROC)
@@ -14,7 +18,12 @@ library(parallel)
 library(tidyverse)
 set.seed(01242020) # Jan 24 2020
 on_sonic <- F
-n_cores <- 2
+
+sp_to_fit <- list("Tachypodoiulus niger", "Julus scandinavius", 
+                  "Ommatoiulus sabulosus")
+# "Ophyiulus pilosus", "Blaniulus guttulatus", "Glomeris marginata", 
+# 
+names(sp_to_fit) <- sp_to_fit
 
 # load objects that are needed to fit SDMs
 mill_wide <- readRDS("mill_wide.rds")
@@ -28,7 +37,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
   #       sp_df - data frame with species observations and a column called 
   #               "folds" giving the cross-validation folds each record is in
   #       pred_names - character vector giving the variables to use as predictors
-  browser()
+  # browser()
   if(is_tibble(sp_df)) {
     sp_df <- data.frame(sp_df)
   }
@@ -112,24 +121,73 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
 }
 
 
-call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names, ...) {
+call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names, 
+                        spatial.under.sample, ...) {
   # Function to call fit_rf on each species in a list of species dfs
-  lapply(1:5, FUN = fit_rf, sp_name = sp_name, 
+  # First spatially sub-sample non-detection records to even absence records
+  # and improve class balance (presuming sp. is rare)  
+  # Then fit RF.
+  #
+  # ARGS: sp_name - character string giving the name of the column with species
+  #           detection/non-detection data
+  #       test_fold - integer givin the CV fold to be used for testing
+  #       sp_df - data frame with species observations and predictor variables
+  #       pred_names - character vector with names of columns to be used as 
+  #           predictor variables
+  #       spatial.under.sample - T/F indicating whether to perform spatial
+  #           under sampling (Robinson et al. 2018).  If TRUE, the spatial
+  #           undersampling grid cells must be provided as a column named
+  #           "spat_subsamp_cell"
+  if(is_tibble(sp_df)) {
+    sp_df <- data.frame(sp_df)
+  }
+  sp_name <- gsub(" ", ".", sp_name)
+  colnames(sp_df) <- gsub(" ", ".", colnames(sp_df))
+  
+  if(spatial.under.sample) {
+    # separate presence and absence checklists.  Keep all presence checklists.
+    presences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 1, ]
+    absences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 0, ]
+    # spatially sub-sample absence checklists to 1 per cell
+    cell_abs_tab <- table(absences$spat_subsamp_cell)
+    keep_ab_rows <- c()
+    for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
+      cell <- unique(absences$spat_subsamp_cell)[ri]
+      keep_ab_rows <- c(keep_ab_rows, 
+                        sample(which(absences$spat_subsamp_cell == cell), 
+                               size = 1))
+    }
+    absences <- absences[keep_ab_rows, ] 
+    
+    # combine spatially sub-sampled non-detection data with all detection data
+    sp_df <- bind_rows(absences, presences)
+  }
+ 
+  # fit RF
+  lapply(1:n_folds, FUN = fit_rf, sp_name = sp_name, 
          sp_df = sp_df, pred_names = pred_names)
 }
 
-# fit spatial models
-sp_to_fit <- list("Tachypodoiulus niger", "Ommatoiulus sabulosus")
-# "Ophyiulus pilosus", "Blaniulus guttulatus", 
-# "Julus scandinavius", "Glomeris marginata", 
 
-names(sp_to_fit) <- sp_to_fit
+#### Fit Random Forest -------------------------------------------------------
+# fit Day of Year + List Length models
+day_ll_rf_fits <- mclapply(sp_to_fit, 
+                            FUN = call_fit_rf, 
+                            sp_df = mill_wide, 
+                            pred_names = c("day_of_year", "list_length"),
+                            spatial.under.sample = TRUE, 
+                            mc.cores = n_cores)
+try(print(pryr::object_size(day_ll_rf_fits)))
+try(saveRDS(day_ll_rf_fits, "day_ll_rf_fits.rds"))
+
+# fit spatial models
 spatial_rf_fits <- mclapply(sp_to_fit, 
                             FUN = call_fit_rf, 
                             sp_df = mill_wide, 
                             pred_names = c("eastings", "northings", 
                                            "day_of_year", 
-                                           "list_length"), 
+                                           "list_length"),
+                            spatial.under.sample = TRUE, 
                             mc.cores = n_cores)
 try(print(pryr::object_size(spatial_rf_fits)))
 try(saveRDS(spatial_rf_fits, "spatial_rf_fits.rds"))
@@ -145,20 +203,49 @@ env_rf_fits <- mclapply(sp_to_fit,
                                        "arable_l2", "elev", 
                                        "day_of_year", 
                                        "list_length"), 
+                        spatial.under.sample = TRUE, 
                         mc.cores = n_cores)
 try(print(pryr::object_size(env_rf_fits)))
 try(saveRDS(env_rf_fits, "env_rf_fits.rds"))
 ### end fit random forest ----------------------------------------------------
 
-# view AUC (averaged over 5 folds)
-lapply(spatial_rf_fits, 
-            FUN = function(x) {mean(sapply(x, FUN = function(y) {
-              tryCatch(y$auc, error = function(x) NA)}), 
-              na.rm = T)})
-lapply(env_rf_fits, 
-       FUN = function(x) {mean(sapply(x, FUN = function(y) {
-         tryCatch(y$auc, error = function(x) NA)}), 
-         na.rm = T)})
+
+# view AUC (averaged over CV folds)
+# rf_performance <- expand.grid(species = names(sp_to_fit), 
+#                               model = c("doy_ll", "spatial", "environmental"), 
+#                               stringsAsFactors = FALSE)
+# rf_performance$metric <- "AUC"
+# rf_performance$value <- NA
+# rf_performance$value[rf_performance$model == "doy_ll"] <- sapply(
+#   day_ll_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
+#     tryCatch(y$auc, error = function(x) NA)}), 
+#     na.rm = T)})
+# rf_performance$value[rf_performance$model == "spatial"] <- sapply(
+#   spatial_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
+#     tryCatch(y$auc, error = function(x) NA)}), 
+#     na.rm = T)})
+# rf_performance$value[rf_performance$model == "environmental"] <- sapply(
+#   env_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
+#     tryCatch(y$auc, error = function(x) NA)}), 
+#     na.rm = T)})
+
+# get AUC for each fold & each model
+rf_performance <- expand.grid(fold = 1:n_folds, 
+                              species = names(sp_to_fit),
+                              model = c("doy_ll", "spatial", "environmental"),
+                              stringsAsFactors = FALSE)
+rf_performance$metric <- "AUC"
+rf_performance$value <- NA
+rf_performance$value[rf_performance$model == "doy_ll"] <- sapply(
+  day_ll_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
+    tryCatch(y$auc, error = function(x) NA)})})
+rf_performance$value[rf_performance$model == "spatial"] <- sapply(
+  spatial_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
+    tryCatch(y$auc, error = function(x) NA)})})
+rf_performance$value[rf_performance$model == "environmental"] <- sapply(
+  env_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
+    tryCatch(y$auc, error = function(x) NA)})})
+
 
 # Get predictions with standardized survey effort
 mill_predictions_spatial_rf <- lapply(
@@ -205,6 +292,14 @@ try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_rf.rds"))
 
 
 ### exploratory plotting - this is not for running on sonic
+
+ggplot(data = rf_performance, aes(x = model, y = value, color = species)) + 
+  geom_point() + 
+  geom_boxplot() + 
+  facet_wrap(~metric) + 
+  theme_bw()
+
+
 # plot average of predictions from all 5 folds (so 4 predictions will be to
 # training data, one prediction to test data in each grid cell)
 
@@ -223,7 +318,7 @@ for(i in 1:length(mill_predictions_spatial_rf)) {
       geom_point(data = mill, aes(x = eastings, y = northings),
                  color = "light grey", size = 0.5) +
       geom_point(data = mill[mill$Genus_species ==
-                               names(mill_predictions_env_rf)[i], ],
+                               names(mill_predictions_spatial_rf)[i], ],
                  aes(x = eastings, y = northings), color = "orange") +
     ggtitle(paste0(names(mill_predictions_spatial_rf)[i], 
                    " - spatial model"))
@@ -281,7 +376,7 @@ for(i in 1:length(mill_var_imp_env_rf)) {
           geom_bar(stat = "identity") + 
           coord_flip() + 
           ggtitle(paste0(names(mill_var_imp_env_rf)[i], 
-                         " - spatial model"))
+                         " - environmental model"))
   )
 }
 
