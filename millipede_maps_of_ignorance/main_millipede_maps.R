@@ -29,7 +29,7 @@ library(fields)
 library(gstat)
 library(raster)
 library(parallel)
-#library(sf) # can't install sf on sonic as of 8 Jan 2020
+library(sf) # can't install sf on sonic as of 8 Jan 2020
 library(fasterize)
 library(rgdal)
 library(dismo)

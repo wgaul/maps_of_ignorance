@@ -36,13 +36,15 @@ if(!all(file.exists("annual_precip_hectad.rds") &
         file.exists("corine_label_2_hectad.RData") & 
         file.exists("corine_label_2_1km.RData") &
         file.exists("coast_dist_hec.RData") & 
-        file.exists("coast_dist_1km.RData"))) {
+        file.exists("coast_dist_1km.RData") & 
+        file.exists("soil_SIS.rds"))) {
   source("./eobs_annual_precipitation_hectad.R")
   source("./eobs_max_summer_temp_hec.R")
   source("./eobs_min_winter_temp_hec.R")
   source("./interp_elev_hec_etopo1.R")
   source("./prep_corine.R")
   source("./distance_to_coast_calc.R")
+  source("./soil_SIS_prep.R")
 }
 load("annual_precip_hectad.RData")
 rr_rast_1k <- read_rds("annual_precip_1km.rds")
