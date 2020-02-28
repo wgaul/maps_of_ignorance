@@ -1,23 +1,18 @@
 ####################################
-## Prepare Ireland soil SIS data for use at hectad scale
+## Prepare Ireland soil SIS data 
 ## 
-## author: Willson Gaul wgaul@hotmail.com (based on a script by prep_corine.R
-##          which was based on code by Hannah White vasc_fres_all.R shared with 
-##          wg via GitHub in April 2018)
+## author: Willson Gaul wgaul@hotmail.com 
 ## created: 25 Feb 2020
-## last modified: 27 Feb 2020
+## last modified: 28 Feb 2020
 ####################################
-
-# sis <- st_read(dsn = "./data/SOIL_SISNationalSoils_shp/Data/SOIL_SISNationalSoils_Shp/", 
-#                layer = "SOIL_SISNationalSoils", 
-#                stringsAsFactors = FALSE)
-# sis <- st_transform(sis, crs = 29903) # transform to epsg 29903
 
 sis <- readOGR(dsn = "./data/SOIL_SISNationalSoils_shp/Data/SOIL_SISNationalSoils_Shp/", 
                layer = "SOIL_SISNationalSoils")
 sis <- spTransform(sis, CRS("+init=epsg:29903"))
 
-
+soil <- readOGR(dsn = "~/Documents/Data_Analysis/UCD/predictor_variables/Soils/Data/", 
+                layer = "soils_ie_f1")
+soil <- spTransform(soil, CRS("+init=epsg:29903"))
 
 # make 10km, 1km, and 100m square template rasters
 irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
@@ -32,9 +27,47 @@ res(irish_1km_raster) <- 1000
 df_1km <- data.frame(rasterToPoints(irish_1km_raster, spatial = F))
 colnames(df_1km) <- c("eastings", "northings")
 
-irish_100m_raster <- raster(xmn = 10000, xmx = 380000, ymn = -30000, ymx = 500000, 
-                            crs = CRS("+init=epsg:29903"), vals = 1)
-res(irish_100m_raster) <- 100
+
+### Soil Drainage calculation --------------------------------------------------
+### Calculate percent of grid squares covered by drainage code
+# get unique soil drainage codes
+sis$DRAINAGE <- as.character(sis$DRAINAGE)
+sl_dr <- unique(sis$DRAINAGE)
+names(sl_dr) <- sl_dr
+sl_dr <- as.list(sl_dr)
+sl_dr <- sl_dr[!is.na(sl_dr)]
+
+## calculate percent cover of Drainage classes for 10km squares
+for(i in 1:length(sl_dr)) { # loop through soil associations
+  lyr <- names(sl_dr)[i]
+  sl <- sis[sis$DRAINAGE == lyr & !is.na(sis$DRAINAGE), ]
+  # calculate percent of grid cell covered
+  sl_r <- rasterize(sl, irish_hec_raster, getCover = TRUE) 
+  sl_dr[[i]] <- sl_r
+}
+
+soil_drainage_10km_brick <- brick(sl_dr)
+
+## calculate percent cover of Drainage classes for 1km squares
+for(i in 1:length(sl_dr)) { # loop through soil associations
+  lyr <- names(sl_dr)[i]
+  sl <- sis[sis$DRAINAGE == lyr, ]
+  # calculate percent of grid cell covered
+  sl_r <- rasterize(sl, irish_1km_raster, getCover = TRUE) 
+  sl_dr[[i]] <- sl_r
+}
+
+soil_drainage_1km_brick <- brick(sl_dr)
+
+## save raster bricks
+writeRaster(soil_drainage_10km_brick, filename = "soil_drainage_10km_brick.grd", 
+            overwrite = TRUE)
+writeRaster(soil_drainage_1km_brick, filename = "soil_drainage_1km_brick.grd", 
+            overwrite = TRUE)
+
+rm(sl_dr, sl_r, sl, sis)
+### end soil drainage ----------------------------------------------------------
+
 
 ### Soil Association calculation ------------------------------------------------
 ### Calculate percent of grid squares covered by each soil Association
@@ -67,34 +100,42 @@ res(irish_100m_raster) <- 100
 ### end soil association -------------------------------------------------------
 
 
-### Soil Drainage calculation --------------------------------------------------
-### Calculate percent of grid squares covered by each soil Association
-# get unique soil Association codes
-sis$DRAINAGE <- as.character(sis$DRAINAGE)
-sl_dr <- unique(sis$DRAINAGE)
-names(sl_dr) <- sl_dr
-sl_dr <- as.list(sl_dr)
-sl_dr <- sl_dr[!is.na(sl_dr)]
+### IFS Soil Code ------------------------------------------------------------
+### Calculate percent of grid squares covered by IFS Soil
+# get unique codes
+soil$IFS_SOIL <- as.character(soil$IFS_SOIL)
+sl_ifs <- unique(soil$IFS_SOIL)
+names(sl_ifs) <- sl_ifs
+sl_ifs <- as.list(sl_ifs)
+sl_ifs <- sl_ifs[!is.na(sl_ifs)]
 
 ## calculate percent cover of Drainage classes for 10km squares
-for(i in 1:length(sl_dr)) { # loop through soil associations
-  lyr <- names(sl_dr)[i]
-  sl <- sis[sis$DRAINAGE == lyr & !is.na(sis$DRAINAGE), ]
+for(i in 1:length(sl_ifs)) { # loop through soil associations
+  lyr <- names(sl_ifs)[i]
+  sl <- soil[soil$IFS_SOIL == lyr & !is.na(soil$IFS_SOIL), ]
   # calculate percent of grid cell covered
   sl_r <- rasterize(sl, irish_hec_raster, getCover = TRUE) 
-  sl_dr[[i]] <- sl_r
+  sl_ifs[[i]] <- sl_r
 }
 
-soil_drainage_10km_brick <- brick(sl_dr)
+soil_IFS_10km_brick <- brick(sl_ifs)
 
 ## calculate percent cover of Drainage classes for 1km squares
-for(i in 1:length(sl_dr)) { # loop through soil associations
-  lyr <- names(sl_dr)[i]
-  sl <- sis[sis$DRAINAGE == lyr, ]
+for(i in 1:length(sl_ifs)) { # loop through soil codes
+  lyr <- names(sl_ifs)[i]
+  sl <- soil[soil$IFS_SOIL == lyr & !is.na(soil$IFS_SOIL), ]
   # calculate percent of grid cell covered
   sl_r <- rasterize(sl, irish_1km_raster, getCover = TRUE) 
-  sl_dr[[i]] <- sl_r
+  sl_ifs[[i]] <- sl_r
 }
 
-soil_drainage_1km_brick <- brick(sl_dr)
-### end soil drainage ----------------------------------------------------------
+soil_IFS_1km_brick <- brick(sl_ifs)
+
+## save raster bricks
+writeRaster(soil_IFS_10km_brick, filename = "soil_IFS_10km_brick.grd", 
+            overwrite = TRUE)
+writeRaster(soil_IFS_1km_brick, filename = "soil_IFS_1km_brick.grd", 
+            overwrite = TRUE)
+
+rm(soil_IFS_10km_brick, soil_IFS_1km_brick, sl_ifs, sl_r, soil)
+### end IFS soil code ----------------------------------------------------------
