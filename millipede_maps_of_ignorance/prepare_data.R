@@ -37,7 +37,10 @@ if(!all(file.exists("annual_precip_hectad.rds") &
         file.exists("corine_label_2_1km.RData") &
         file.exists("coast_dist_hec.RData") & 
         file.exists("coast_dist_1km.RData") & 
-        file.exists("soil_SIS.rds"))) {
+        file.exists("soil_IFS_10km_brick.grd") & 
+        file.exists("soil_IFS_1km_brick.grd") & 
+        file.exists("soil_drainage_10km_brick.grd") & 
+        file.exists("soil_drainage_1km_brick.grd"))) {
   source("./eobs_annual_precipitation_hectad.R")
   source("./eobs_max_summer_temp_hec.R")
   source("./eobs_min_winter_temp_hec.R")

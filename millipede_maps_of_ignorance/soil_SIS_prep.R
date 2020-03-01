@@ -1,9 +1,11 @@
 ####################################
 ## Prepare Ireland soil SIS data 
 ## 
+## This script takes about 12 hours to run on WG's work laptop.
+## 
 ## author: Willson Gaul wgaul@hotmail.com 
 ## created: 25 Feb 2020
-## last modified: 28 Feb 2020
+## last modified: 1 March 2020
 ####################################
 
 sis <- readOGR(dsn = "./data/SOIL_SISNationalSoils_shp/Data/SOIL_SISNationalSoils_Shp/", 
@@ -51,7 +53,7 @@ soil_drainage_10km_brick <- brick(sl_dr)
 ## calculate percent cover of Drainage classes for 1km squares
 for(i in 1:length(sl_dr)) { # loop through soil associations
   lyr <- names(sl_dr)[i]
-  sl <- sis[sis$DRAINAGE == lyr, ]
+  sl <- sis[!is.na(sis$DRAINAGE) & sis$DRAINAGE == lyr, ]
   # calculate percent of grid cell covered
   sl_r <- rasterize(sl, irish_1km_raster, getCover = TRUE) 
   sl_dr[[i]] <- sl_r
@@ -61,9 +63,13 @@ soil_drainage_1km_brick <- brick(sl_dr)
 
 ## save raster bricks
 writeRaster(soil_drainage_10km_brick, filename = "soil_drainage_10km_brick.grd", 
-            overwrite = TRUE)
+            overwrite = TRUE, bylayer = TRUE, 
+            suffix = names(soil_drainage_10km_brick))
+saveRDS(soil_drainage_10km_brick, file = "soil_drainage_10km_brick.rds")
 writeRaster(soil_drainage_1km_brick, filename = "soil_drainage_1km_brick.grd", 
-            overwrite = TRUE)
+            overwrite = TRUE, bylayer = TRUE, 
+            suffix = names(soil_drainage_1km_brick))
+saveRDS(soil_drainage_1km_brick, file = "soil_drainage_1km_brick.rds")
 
 rm(sl_dr, sl_r, sl, sis)
 ### end soil drainage ----------------------------------------------------------
@@ -133,9 +139,13 @@ soil_IFS_1km_brick <- brick(sl_ifs)
 
 ## save raster bricks
 writeRaster(soil_IFS_10km_brick, filename = "soil_IFS_10km_brick.grd", 
-            overwrite = TRUE)
+            overwrite = TRUE, bylayer = TRUE, 
+            suffix = names(soil_IFS_10km_brick))
+saveRDS(soil_IFS_10km_brick, file = "soil_IFS_10km_brick.rds")
 writeRaster(soil_IFS_1km_brick, filename = "soil_IFS_1km_brick.grd", 
-            overwrite = TRUE)
+            overwrite = TRUE, bylayer = TRUE,
+            suffix = names(soil_IFS_1km_brick))
+saveRDS(soil_IFS_1km_brick, file = "soil_IFS_1km_brick.rds")
 
 rm(soil_IFS_10km_brick, soil_IFS_1km_brick, sl_ifs, sl_r, soil)
 ### end IFS soil code ----------------------------------------------------------
