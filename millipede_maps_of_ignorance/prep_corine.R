@@ -11,6 +11,7 @@
 corine <- raster("./data/CORINE_IE.grd")
 c_legend <- read_csv("./data/clc_legend.csv")
 hecs <- read_csv("./data/Irish_land_hectads.csv")
+
 irish_1km_raster <- raster(xmn = 10000, xmx = 380000, ymn = -30000, ymx = 500000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_1km_raster) <- 1000

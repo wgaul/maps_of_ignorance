@@ -34,7 +34,7 @@
 ## 
 ## author: Willson Gaul
 ## created: 25 Sep 2017
-## last modified: 6 Jan 2020 - change how template raster is produced
+## last modified: 3 March 2020 - change how template raster is produced
 #################################### 
 
 load("./data/eobs.RData")
@@ -53,7 +53,7 @@ irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 55000
             crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_hec_raster) <- 10000
 
-irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+irish_1km_raster <- raster(xmn = 10000, xmx = 380000, ymn = -30000, ymx = 500000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_1km_raster) <- 1000
 ### --------------------- end hectad raster -----------------------------------

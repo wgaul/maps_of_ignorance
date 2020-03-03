@@ -3,7 +3,7 @@
 ## 
 ## Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 March 2019
-## last modified: 25 Oct 2019 - changed to millipedes map of ignorance project
+## last modified: 3 March 2020 - changed to millipedes map of ignorance project
 ###########################
 
 print_plots <- F
@@ -24,7 +24,9 @@ irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 55000
 res(irish_hec_raster) <- 10000
 
 # make 1km raster and shapefile templates 
-ie_1km_raster <- disaggregate(irish_hec_raster, fact = 10)
+ie_1km_raster <- raster(xmn = 10000, xmx = 380000, ymn = -30000, ymx = 500000, 
+                           crs = CRS("+init=epsg:29903"), vals = 1)
+# ie_1km_raster <- disaggregate(irish_hec_raster, fact = 10)
 ie_1km_shp <- st_as_sf(rasterToPolygons(ie_1km_raster)) %>% 
   st_transform(ie_1km_shp, crs = 29903)
 ### end load data -----------------------------------------------------------
