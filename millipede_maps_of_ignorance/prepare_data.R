@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 6 Jan 2020
+## last modified: 4 March 2020
 ##############################
 
 ### load millipede data
@@ -63,6 +63,10 @@ load("corine_label_2_hectad.RData")
 load("corine_label_2_1km.RData")
 load("coast_dist_hec.RData")
 load("coast_dist_1km.RData")
+soil_drainage_10km_brick <- read_rds("soil_drainage_10km_brick.rds")
+soil_drainage_1km_brick <- read_rds("soil_drainage_1km_brick.rds")
+soil_IFS_10km_brick <- read_rds("soil_IFS_10km_brick.rds")
+soil_IFS_1km_brick <- read_rds("soil_IFS_1km_brick.rds")
 
 pred_brick <- brick(list(
   mean_tn = resample(krg_mean_tn_rast, krg_mean_rr_rast), 
@@ -74,7 +78,9 @@ pred_brick <- brick(list(
   pasture_l2 = resample(pasture_l2_rast, krg_mean_rr_rast), 
   arable_l2 = resample(arable_land_l2_rast, krg_mean_rr_rast), 
   coast_dist = resample(coast_dist_hec_rast, krg_mean_rr_rast), 
-  elev = resample(elev, krg_mean_rr_rast)))
+  elev = resample(elev, krg_mean_rr_rast), 
+  soil_drainage = resample(soil_drainage_10km_brick, krg_mean_rr_rast), 
+  soil_IFS = resample(soil_IFS_10km_brick, krg_mean_rr_rast)))
 # mask pred brick by one of the CORINE layers to get only Irish land cells
 # pred_brick <- mask(pred_brick, pred_brick$artificial_surfaces)
 # scale and centre environmental predictors over study extent
@@ -89,9 +95,10 @@ pred_brick_1k <- brick(list(
   wetlands_l1 = wetlands_l1_rast_1km, 
   pasture_l2 = pasture_l2_rast_1km,
   arable_l2 = arable_land_l2_rast_1km,
-  coast_dist = coast_dist_1km_rast, 
-  elev = elev_1k
-))
+  # coast_dist = coast_dist_1km_rast, 
+  elev = elev_1k, 
+  soil_drainage = soil_drainage_1km_brick,
+  soil_IFS = soil_IFS_1km_brick))
 pred_brick_1k <- scale(pred_brick_1k)
 
 # make hec_names spatial 

@@ -31,14 +31,6 @@ ie_1km_shp <- st_as_sf(rasterToPolygons(ie_1km_raster)) %>%
   st_transform(ie_1km_shp, crs = 29903)
 ### end load data -----------------------------------------------------------
 
-### make 1km raster and shapefile templates -----------------------------------
-ie_1km_raster <- disaggregate(irish_hec_raster, fact = 10)
-ie_1km_shp <- st_as_sf(rasterToPolygons(ie_1km_raster)) %>% 
-  st_transform(ie_1km_shp, crs = 29903)
-## end make 1km raster and shapefile templates --------------------------------
-
-
-
 ### calculate distance from hectads to coast ----------------------------------
 # make points at the centroid of each hectad
 hec_points <- st_centroid(hecs_shp)

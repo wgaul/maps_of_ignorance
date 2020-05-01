@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 22 Feb 2020
+## last modified: 1 May 2020
 ##############################
 library(randomForest)
 library(pROC)
@@ -19,10 +19,10 @@ library(tidyverse)
 set.seed(01242020) # Jan 24 2020
 on_sonic <- F
 
-sp_to_fit <- list("Tachypodoiulus niger", "Julus scandinavius", 
+sp_to_fit <- list("Tachypodoiulus niger", 
                   "Ommatoiulus sabulosus")
 # "Ophyiulus pilosus", "Blaniulus guttulatus", "Glomeris marginata", 
-# 
+# "Julus scandinavius", 
 names(sp_to_fit) <- sp_to_fit
 
 # load objects that are needed to fit SDMs

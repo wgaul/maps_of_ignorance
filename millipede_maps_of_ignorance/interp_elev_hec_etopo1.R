@@ -11,7 +11,7 @@
 ## created: 24 Nov 2017
 ## last modified: 10 May 2019 changed location of grid 
 ##      25 Oct 2019 - changed directory to millipede map of ignorance project
-##      6 Jan 2020 - make a 1km raster also
+##      4 March 2020 - make a 1km raster also
 ################################
 
 print_plots <- F
@@ -26,7 +26,9 @@ rm(ir)
 irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_hec_raster) <- 10000
-irish_1km_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, ymx = 550000, 
+
+# make 1km template raster
+irish_1km_raster <- raster(xmn = 10000, xmx = 380000, ymn = -30000, ymx = 500000, 
                            crs = CRS("+init=epsg:29903"), vals = 1)
 res(irish_1km_raster) <- 1000
 
