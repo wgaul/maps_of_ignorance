@@ -10,13 +10,12 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 1 May 2020
+## last modified: 11 May 2020
 ##############################
 library(randomForest)
 library(pROC)
 library(parallel)
 library(tidyverse)
-set.seed(01242020) # Jan 24 2020
 on_sonic <- F
 
 sp_to_fit <- list("Tachypodoiulus niger", 
@@ -30,13 +29,15 @@ mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
 
 ### fit random forest ---------------------------------------------------------
-fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
+fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
   #       sp_name - character string giving the name of the column with 
   #                 detection/non-detection data to use
   #       sp_df - data frame with species observations and a column called 
   #               "folds" giving the cross-validation folds each record is in
-  #       pred_names - character vector giving the variables to use as predictors
+  #       pred_names - character vector giving the variables to use as 
+  #       predictors
+  #       newdata - new data for predictions with standardized recording effort
   # browser()
   if(is_tibble(sp_df)) {
     sp_df <- data.frame(sp_df)
@@ -89,8 +90,10 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
   # importance if I want it (see manual linked in help documentation)
   mod <- tryCatch({
     randomForest(
-      x = sp_df[sp_df$folds != test_fold, which(colnames(sp_df) %in% pred_names)],
-      y = factor(sp_df[sp_df$folds != test_fold, which(colnames(sp_df) == sp_name)]),
+      x = sp_df[sp_df$folds != test_fold, which(colnames(sp_df) %in% 
+                                                  pred_names)],
+      y = factor(sp_df[sp_df$folds != test_fold, which(colnames(sp_df) == 
+                                                         sp_name)]),
       ntree = 1000, 
       mtry = mtry_best, 
       nodesize = 1, 
@@ -98,37 +101,33 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names) {
       importance = FALSE, 
       keep.forest = TRUE)}, error = function(x) NA)
   
-  # make predictions for measuring AUC (predict only to data subset not used for 
-  # model training)
+  # make predictions for model testing (predict only to data subset not used 
+  # for model training)
   f_pred <- tryCatch(predict(mod, newdata = sp_df[sp_df$folds == test_fold, ], 
                              type = "prob")[, "1"], 
                      error = function(x) NA)
-  f_auc <- tryCatch(
-    roc(response = factor(sp_df[sp_df$folds == test_fold, sp_name], 
-                          levels = c("0", "1")),
-        predictor = f_pred,
-        auc = T), 
-    error = function(x) NA)
   
   # make dataframe of predictions with standardized recording effort
   newdata$pred[newdata$folds == test_fold] <- tryCatch(predict(
     mod, newdata = newdata[newdata$folds == test_fold, ], type = "prob")[, "1"], 
     error = function(x) NA)
-  # return fitted model, AUC value, and predictions for this model
-  tryCatch(list(m = mod, auc = f_auc$auc[1], predictions = newdata, 
-                roc_object = f_auc), 
+  # return fitted model, and predictions for this model
+  tryCatch(list(m = mod, predictions = newdata), 
            error = function(x) "No list exported from fit_rf.")
 }
 
 
-call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names, 
-                        spatial.under.sample, ...) {
+call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df, 
+                        pred_names, spatial.under.sample, ...) {
   # Function to call fit_rf on each species in a list of species dfs
   # First spatially sub-sample non-detection records to even absence records
   # and improve class balance (presuming sp. is rare)  
   # Then fit RF.
   #
-  # ARGS: sp_name - character string giving the name of the column with species
+  # ARGS: fold_assignments - object of class SpatialBlock with the 
+  #         cross-validation fold that each observation (row) of sp_df is
+  #         assigned to
+  #       sp_name - character string giving the name of the column with species
   #           detection/non-detection data
   #       test_fold - integer givin the CV fold to be used for testing
   #       sp_df - data frame with species observations and predictor variables
@@ -138,7 +137,13 @@ call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names,
   #           under sampling (Robinson et al. 2018).  If TRUE, the spatial
   #           undersampling grid cells must be provided as a column named
   #           "spat_subsamp_cell"
-  if(is_tibble(sp_df)) {
+  browser()
+  # add CV fold assignments to sp_df
+  sp_df <- st_join(
+    st_as_sf(sp_df), 
+    st_as_sf(fold_assignments$blocks[, names(fold_assignments$blocks) ==
+                                       "folds"]))
+  if(is_tibble(sp_df) | "sf" %in% class(sp_df)) {
     sp_df <- data.frame(sp_df)
   }
   sp_name <- gsub(" ", ".", sp_name)
@@ -163,22 +168,37 @@ call_fit_rf <- function(sp_name, test_fold, sp_df, pred_names,
     sp_df <- bind_rows(absences, presences)
   }
  
+  newdata <- st_join(st_as_sf(newdata), st_as_sf(fold_assignments$blocks))
+  newdata <- data.frame(newdata)
+  
   # fit RF
   lapply(1:n_folds, FUN = fit_rf, sp_name = sp_name, 
-         sp_df = sp_df, pred_names = pred_names)
+         sp_df = sp_df, pred_names = pred_names, newdata = newdata)
 }
 
 
 #### Fit Random Forest -------------------------------------------------------
 # fit Day of Year + List Length models
-day_ll_rf_fits <- mclapply(sp_to_fit, 
-                            FUN = call_fit_rf, 
-                            sp_df = mill_wide, 
-                            pred_names = c("day_of_year", "list_length"),
-                            spatial.under.sample = TRUE, 
-                            mc.cores = n_cores)
-try(print(pryr::object_size(day_ll_rf_fits)))
-try(saveRDS(day_ll_rf_fits, "day_ll_rf_fits.rds"))
+day_ll_rf_fits <- sp_to_fit
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  day_ll_rf_fits[[i]] <- mclapply(fold_assignments_10k, 
+                                  sp_name = sp_name, 
+                                  FUN = call_fit_rf, 
+                                  sp_df = mill_wide, 
+                                  pred_names = c("day_of_year", "list_length"),
+                                  spatial.under.sample = TRUE, 
+                                  mc.cores = n_cores)
+  try(print(pryr::object_size(day_ll_rf_fits)))
+  try(saveRDS(day_ll_rf_fits, paste0("day_ll_rf_fits_", gsub(" ", "_", sp_name),
+                                     ".rds")))
+  rm(day_ll_rf_fits)
+}
+
+
+
+
+
 
 # fit spatial models
 spatial_rf_fits <- mclapply(sp_to_fit, 

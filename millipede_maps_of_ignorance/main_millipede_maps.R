@@ -9,8 +9,9 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 24 Jan 2020
+## last modified: 11 May 2020
 #################################
+rm(list = ls())
 dbg <- F
 calc_1k_distances <- F # run distances for 1km grid (might take a long time)
 seed <- 23012020  # 23 Jan 2020
@@ -19,7 +20,8 @@ set.seed(seed)
 fit_brt <- F
 fit_rf <- T
 make_sampling_plots <- F
-n_folds <- 3
+n_folds <- 5 # number of cross-validation folds to use
+n_cv_trials <- 3 # number of different cross-validation fold layouts to use
 
 library(wgutil)
 library(Hmisc)

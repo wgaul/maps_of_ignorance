@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 4 March 2020
+## last modified: 11 May 2020
 ##############################
 
 ### load millipede data
@@ -67,6 +67,12 @@ soil_drainage_10km_brick <- read_rds("soil_drainage_10km_brick.rds")
 soil_drainage_1km_brick <- read_rds("soil_drainage_1km_brick.rds")
 soil_IFS_10km_brick <- read_rds("soil_IFS_10km_brick.rds")
 soil_IFS_1km_brick <- read_rds("soil_IFS_1km_brick.rds")
+
+# remove Swamp layer (no data there as far as I can tell)
+soil_IFS_10km_brick <- subset(soil_IFS_10km_brick,
+                              which(names(soil_IFS_10km_brick) != "Swamp"))
+soil_IFS_1km_brick <- subset(soil_IFS_1km_brick,
+                              which(names(soil_IFS_1km_brick) != "Swamp"))
 
 pred_brick <- brick(list(
   mean_tn = resample(krg_mean_tn_rast, krg_mean_rr_rast), 

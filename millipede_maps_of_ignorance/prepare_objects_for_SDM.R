@@ -10,7 +10,7 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 24 Jan 2020
-## last modified: 24 Jan 2020
+## last modified: 11 May 2020
 ##############################
 library(blockCV)
 library(sf)
@@ -33,7 +33,8 @@ mill_wide <- mill_fewer_vars %>%
   group_by(checklist_ID) %>%
   summarise_at(vars("Adenomeris gibbosa":"Thalassisobates littoralis"), sum) %>%
   left_join(., mill_fewer_vars[, colnames(mill_fewer_vars) %nin% 
-                                            c("RecordId", "StartDate", "EndDate",
+                                            c("RecordId", "StartDate", 
+                                              "EndDate",
                                               "SiteName", "GridReference", 
                                               "Latitude", "Longitude", 
                                               "Precision", 
@@ -46,17 +47,25 @@ mill_wide <- mill_fewer_vars %>%
 ### Make spatial block CV folds ------------------------------------------------
 # Find best block size using only a subset of all data (for memory efficiency)
 spatialAutoRange(pred_brick, sampleNumber = 1000, 
-                 nCores = 3, showPlots = TRUE, plotVariograms = TRUE)
+                 nCores = 3, showPlots = TRUE, plotVariograms = FALSE)
 
 # make spatial blocks for CV testing
-block_mill_10k <- spatialBlock(mill_spat, 
-                               theRange = 100000, 
-                               k = n_folds, 
-                               selection = "random", 
-                               iteration = 5, 
-                               showBlocks = TRUE, 
-                               rasterLayer = pred_brick$pasture_l2, 
-                               biomod2Format = FALSE)
+# Make multiple different CV splits
+fold_assignments_10k <- list()
+for(i in 1:n_cv_trials) {
+  fold_assignments_10k[[i]] <- spatialBlock(mill_spat, 
+                                      theRange = 100000, 
+                                      k = n_folds, 
+                                      selection = "random", 
+                                      iteration = 5, 
+                                      showBlocks = TRUE, 
+                                      xOffset = runif(n = 1, min = 0, max = 1), 
+                                      yOffset = runif(n = 1, min = 0, max = 1),
+                                      rasterLayer = pred_brick$pasture_l2, 
+                                      biomod2Format = FALSE)
+}
+# block_mill_10k <- 
+
 # make smaller blocks for spatial undersampling of test (and training) data
 block_subsamp_mill_10k <- spatialBlock(mill_spat, 
                                        theRange = 30000, 
@@ -70,18 +79,12 @@ block_subsamp_mill_10k <- spatialBlock(mill_spat,
 mill_wide <- SpatialPointsDataFrame(
   coords = mill_wide[, c("eastings", "northings")], 
   data = mill_wide, proj4string = CRS("+init=epsg:29903"))
-# add cv fold id
-mill_wide <- st_join(
-  st_as_sf(mill_wide), 
-  st_as_sf(block_mill_10k$blocks[, names(block_mill_10k$blocks) == "folds"]))
 # add spatial subsampling grid cell ID
 mill_wide <- st_join(
   st_as_sf(mill_wide), 
   st_as_sf(block_subsamp_mill_10k$blocks[, names(
     block_subsamp_mill_10k$blocks) == "layer"]))
-mill_wide <- data.frame(mill_wide)
 colnames(mill_wide)[colnames(mill_wide) == "layer"] <- "spat_subsamp_cell"
-mill_wide <- select(mill_wide, -geometry)
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort
@@ -90,15 +93,7 @@ newdata <- cbind(hec_names,
                                             df = TRUE, 
                                             method = "simple", 
                                             cellnumbers = TRUE)))
-newdata <- SpatialPointsDataFrame(coords = newdata[, c("eastings", "northings")], 
-                                  data = newdata, 
-                                  proj4string = CRS("+init=epsg:29903"))
-newdata <- st_join(st_as_sf(newdata), st_as_sf(block_mill_10k$blocks))
-
 newdata_temp <- data.frame(newdata)
-newdata_temp <- select(newdata_temp, -Easting, -Northing, -geometry, -layer)
-
-newdata <- data.frame()
 
 for(i in 1:182) {
   dt <- newdata_temp
@@ -107,6 +102,10 @@ for(i in 1:182) {
 }
 newdata$list_length <- 4
 
+newdata <- SpatialPointsDataFrame(
+  coords = newdata[, c("eastings", "northings")], 
+  data = newdata, 
+  proj4string = CRS("+init=epsg:29903"))
 ### save objects for use on sonic ---------------------------------------------
 saveRDS(mill_wide, "mill_wide.rds")
 saveRDS(newdata, "newdata.rds")
