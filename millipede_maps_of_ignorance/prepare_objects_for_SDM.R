@@ -64,14 +64,15 @@ for(i in 1:n_cv_trials) {
                                       rasterLayer = pred_brick$pasture_l2, 
                                       biomod2Format = FALSE)
 }
-# block_mill_10k <- 
 
 # make smaller blocks for spatial undersampling of test (and training) data
 block_subsamp_mill_10k <- spatialBlock(mill_spat, 
-                                       theRange = 30000, 
+                                       theRange = 30000,
                                        k = n_folds, 
                                        selection = "random", 
                                        iteration = 5, 
+                                       # rows = 20, cols = 20, 
+                                       xOffset = 0.01, yOffset = 0.01,
                                        showBlocks = TRUE, 
                                        rasterLayer = pred_brick$pasture_l2, 
                                        biomod2Format = FALSE)
@@ -88,13 +89,12 @@ colnames(mill_wide)[colnames(mill_wide) == "layer"] <- "spat_subsamp_cell"
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort
-newdata <- cbind(hec_names,  
-                 data.frame(raster::extract(pred_brick, hec_names_spat, 
-                                            df = TRUE, 
-                                            method = "simple", 
-                                            cellnumbers = TRUE)))
-newdata_temp <- data.frame(newdata)
-
+newdata_temp <- cbind(hec_names,  
+                      data.frame(raster::extract(pred_brick, hec_names_spat, 
+                                                 df = TRUE, 
+                                                 method = "simple", 
+                                                 cellnumbers = TRUE)))
+newdata <- data.frame()
 for(i in 1:182) {
   dt <- newdata_temp
   dt$day_of_year <- i*2

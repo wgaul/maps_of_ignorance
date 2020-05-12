@@ -50,6 +50,8 @@ source("prepare_objects_for_SDM.R")
 if(fit_rf) source("fit_rf.R")
 if(fit_brt) source("fit_brt.R")
 
+source("evaluate_models.R")
+
 if(make_sampling_plots) source("sampling_coverage_maps.R")
 
 
