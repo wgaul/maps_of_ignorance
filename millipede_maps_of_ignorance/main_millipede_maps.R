@@ -42,7 +42,7 @@ library(tidyverse)
 
 source("functions_maps_of_ignorance.R")
 
-n_cores <- 2
+n_cores <- 3
 
 source("prepare_data.R")
 source("prepare_objects_for_SDM.R")
@@ -51,6 +51,7 @@ if(fit_rf) source("fit_rf.R")
 if(fit_brt) source("fit_brt.R")
 
 source("evaluate_models.R")
+source("plots_main.R")
 
 if(make_sampling_plots) source("sampling_coverage_maps.R")
 

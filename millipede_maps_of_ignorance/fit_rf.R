@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 12 May 2020
+## last modified: 13 May 2020
 ##############################
 library(randomForest)
 library(parallel)
@@ -49,6 +49,10 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # mtry values to test - default, half that, and twice that
   mtry_tests <- c(ceiling(sqrt(nvar)/2), ceiling(sqrt(nvar)), 
                   ceiling(sqrt(nvar)*2)) 
+ 
+  # label which observations are in the test fold
+  sp_df$test_fold <- sp_df$folds == test_fold
+  sp_df_original$test_fold <- sp_df_original$folds == test_fold
 
   for(k in 1:length(mtry_tests)) {
     m_k <- tryCatch(randomForest(
@@ -100,28 +104,39 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
       importance = FALSE, 
       keep.forest = TRUE)}, error = function(x) NA)
 
-  # make predictions for model testing (predict only to data subset not used 
-  # for model training, and predict to ALL locations for which there is data, 
-  # not just the spatially undersampled locations)
-  f_pred <- tryCatch(predict(
-    mod, newdata = sp_df_original[sp_df_original$folds == test_fold, ], 
-                             type = "prob")[, "1"], 
-                     error = function(x) NA)
-  preds <- sp_df_original[sp_df_original$folds == test_fold, 
-                          c("checklist_ID", "eastings", 
-                            "northings", "hectad", "folds", 
-                            "spat_subsamp_cell", sp_name)]
-  preds$pred <- f_pred
-
-  # in some block CV iterations, a few hectads fall outside of any block, so
-  # they are not assigned a fold.  I will ignore this - I don't think it's worth
-  # taking time to fix, and it should only exclude a few hectads on some 
-  # occasions.  Unlikely to affect results.
-  newdata <- newdata[!is.na(newdata$folds), ]
-  # make dataframe of predictions with standardized recording effort
-  newdata$pred[newdata$folds == test_fold] <- tryCatch(predict(
-    mod, newdata = newdata[newdata$folds == test_fold, ], type = "prob")[, "1"], 
+  # make predictions for model testing (predict to ALL folds, and predict to 
+  # ALL locations for which there is data, not just the spatially 
+  # undersampled locations)
+  # For some reason, predict will fail if any columns have NAs, even if those
+  # are not predictor columns.  Because in some rare cases a fold is not 
+  # assigned to some cells (b/c they are on the boundary of a fold), there are
+  # occasionally NAs in the "folds" column, so that column should not be passed
+  # to predict.
+  f_pred <- tryCatch({
+    predict(mod, newdata = sp_df_original[, which(
+      colnames(sp_df_original) != "folds")], 
+            type = "prob")[, "1"]}, 
     error = function(x) NA)
+  # select columns to keep in df of predictions
+  preds <- sp_df_original[ , c("checklist_ID", "eastings", "northings", 
+                               "hectad", "folds", "test_fold",
+                               "spat_subsamp_cell", sp_name)]
+  preds$pred <- f_pred # add predictions to df
+
+  # make dataframe of predictions with standardized recording effort
+  # predict to ALL sites (both in training and test sets)
+  newdata$pred <- tryCatch({
+    predict(mod, newdata = newdata[, which(colnames(newdata) != "folds")], 
+            type = "prob")[, "1"]}, 
+    error = function(x) NA)
+  
+  # label test folds in case this is ever needed later
+  newdata$test_fold <- newdata$folds == test_fold
+  
+  # drop predictor variables from predictions dataframe 
+  newdata <- select(newdata, hectad, eastings, northings, cells,
+                    list_length, day_of_year, folds, test_fold, pred)
+  
   # return fitted model, and predictions for this model
   tryCatch(list(
     m = mod, preds = preds, standardized_preds = newdata, 
@@ -200,7 +215,7 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
 
 
 #### Fit Random Forest -------------------------------------------------------
-## fit Day of Year + List Length models
+### fit Day of Year + List Length models -------------------------------------
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
@@ -234,74 +249,153 @@ for(i in 1:length(sp_to_fit)) {
                                      ".rds")))
   rm(day_ll_rf_fits)
 }
+### end Day of Year + List Length --------------------------------------------
+
+### fit Spatial + List Length models -----------------------------------------
+# train with raw data
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  spat_rf_fits <- mclapply(fold_assignments_10k, 
+                           sp_name = sp_name, 
+                           FUN = call_fit_rf, 
+                           sp_df = mill_wide, 
+                           pred_names = c("eastings", "northings", 
+                                          "day_of_year", "list_length"),
+                           spatial.under.sample = FALSE, 
+                           mc.cores = n_cores)
+  try(print(pryr::object_size(spat_rf_fits)))
+  try(saveRDS(spat_rf_fits, paste0("spat_rf_noSubSamp_fits_", 
+                                     gsub(" ", "_", sp_name),
+                                     ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    spat_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(lapply(mill_predictions, 
+                             FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_rf_noSubSamp_", 
+                                       gsub(" ", "_", sp_name),
+                                       ".rds")))
+  rm(spat_rf_fits, mill_predictions)
+}
+
+# train with spatially undersampled data 
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  spat_rf_fits <- mclapply(fold_assignments_10k, 
+                           sp_name = sp_name, 
+                           FUN = call_fit_rf, 
+                           sp_df = mill_wide, 
+                           pred_names = c("eastings", "northings", 
+                                          "day_of_year", "list_length"),
+                           spatial.under.sample = TRUE, 
+                           mc.cores = n_cores)
+  try(print(pryr::object_size(spat_rf_fits)))
+  try(saveRDS(spat_rf_fits, paste0("spat_rf_SubSamp_fits_", 
+                                   gsub(" ", "_", sp_name),
+                                   ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    spat_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(
+    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_rf_SubSamp_", 
+                                       gsub(" ", "_", sp_name),
+                                       ".rds")))
+  
+  rm(spat_rf_fits, mill_predictions)
+}
+### end spatial + List Length models ------------------------------------------
 
 
+### fit environmental + LL + DOY model ----------------------------------------
+# train with raw data
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  env_rf_fits <- mclapply(fold_assignments_10k, 
+                           sp_name = sp_name, 
+                           FUN = call_fit_rf, 
+                           sp_df = mill_wide, 
+                           pred_names = c("mean_tn", "mean_tx", 
+                                          "mean_rr", "artificial_surfaces", 
+                                          "forest_seminatural_l1", 
+                                          "wetlands_l1", "pasture_l2", 
+                                          "arable_l2", "elev", 
+                                          "day_of_year", "list_length"),
+                           spatial.under.sample = FALSE, 
+                           mc.cores = n_cores)
+  try(print(pryr::object_size(env_rf_fits)))
+  try(saveRDS(env_rf_fits, paste0("env_rf_noSubSamp_fits_", 
+                                   gsub(" ", "_", sp_name),
+                                   ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    env_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(lapply(mill_predictions, 
+                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, paste0("mill_predictions_env_rf_noSubSamp_", 
+                                       gsub(" ", "_", sp_name),
+                                       ".rds")))
+  rm(env_rf_fits, mill_predictions)
+}
 
-
-
-
-# fit spatial models
-spatial_rf_fits <- mclapply(sp_to_fit, 
-                            FUN = call_fit_rf, 
-                            sp_df = mill_wide, 
-                            pred_names = c("eastings", "northings", 
-                                           "day_of_year", 
-                                           "list_length"),
-                            spatial.under.sample = TRUE, 
-                            mc.cores = n_cores)
-try(print(pryr::object_size(spatial_rf_fits)))
-try(saveRDS(spatial_rf_fits, "spatial_rf_fits.rds"))
-
-# fit environmental model
-env_rf_fits <- mclapply(sp_to_fit, 
-                        FUN = call_fit_rf, 
-                        sp_df = mill_wide, 
-                        pred_names = c("mean_tn", "mean_tx", 
-                                       "mean_rr", "artificial_surfaces", 
-                                       "forest_seminatural_l1", 
-                                       "wetlands_l1", "pasture_l2", 
-                                       "arable_l2", "elev", 
-                                       "day_of_year", 
-                                       "list_length"), 
-                        spatial.under.sample = TRUE, 
-                        mc.cores = n_cores)
-try(print(pryr::object_size(env_rf_fits)))
-try(saveRDS(env_rf_fits, "env_rf_fits.rds"))
+# train with spatially subsampled data
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  env_rf_fits <- mclapply(fold_assignments_10k, 
+                          sp_name = sp_name, 
+                          FUN = call_fit_rf, 
+                          sp_df = mill_wide, 
+                          pred_names = c("mean_tn", "mean_tx", 
+                                         "mean_rr", "artificial_surfaces", 
+                                         "forest_seminatural_l1", 
+                                         "wetlands_l1", "pasture_l2", 
+                                         "arable_l2", "elev", 
+                                         "day_of_year", "list_length"),
+                          spatial.under.sample = TRUE, 
+                          mc.cores = n_cores)
+  try(print(pryr::object_size(env_rf_fits)))
+  try(saveRDS(env_rf_fits, paste0("env_rf_SubSamp_fits_", 
+                                  gsub(" ", "_", sp_name),
+                                  ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    env_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(lapply(mill_predictions, 
+                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, paste0("mill_predictions_env_rf_SubSamp_", 
+                                       gsub(" ", "_", sp_name),
+                                       ".rds")))
+  rm(env_rf_fits, mill_predictions)
+}
+### end environmental + LL + DOY model ------------------------------------
 ### end fit random forest ----------------------------------------------------
 
-
-# view AUC (averaged over CV folds)
-# rf_performance <- expand.grid(species = names(sp_to_fit), 
-#                               model = c("doy_ll", "spatial", "environmental"), 
-#                               stringsAsFactors = FALSE)
-# rf_performance$metric <- "AUC"
-# rf_performance$value <- NA
-# rf_performance$value[rf_performance$model == "doy_ll"] <- sapply(
-#   day_ll_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)}), 
-#     na.rm = T)})
-# rf_performance$value[rf_performance$model == "spatial"] <- sapply(
-#   spatial_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)}), 
-#     na.rm = T)})
-# rf_performance$value[rf_performance$model == "environmental"] <- sapply(
-#   env_rf_fits, FUN = function(x) {mean(sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)}), 
-#     na.rm = T)})
 
 
 
 
 # Get predictions with standardized survey effort
-mill_predictions_spatial_rf <- lapply(
-  spatial_rf_fits, 
-  FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-    tryCatch(x$predictions, error = function(x) NA)})
-  })
-mill_predictions_spatial_rf <- lapply(
-  mill_predictions_spatial_rf, 
-  FUN = function(x) {
-    bind_rows(x[!is.na(x)])})
+
 
 mill_predictions_env_rf <- lapply(
   env_rf_fits, 
@@ -331,98 +425,11 @@ mill_var_imp_env_rf <- lapply(
 )
 
 # save results
-try(saveRDS(mill_predictions_spatial_rf, "mill_predictions_spatial_rf.rds"))
+
 try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_rf.rds"))
 
 
 
-### exploratory plotting - this is not for running on sonic
 
-ggplot(data = rf_performance, aes(x = model, y = value, color = species)) + 
-  geom_point() + 
-  geom_boxplot() + 
-  facet_wrap(~metric) + 
-  theme_bw()
-
-
-# plot average of predictions from all 5 folds (so 4 predictions will be to
-# training data, one prediction to test data in each grid cell)
-
-# spatial model
-mill_predictions_spatial_rf <- lapply(
-  mill_predictions_spatial_rf, FUN= function(x) {
-    group_by(x, hectad) %>%
-      summarise(mean_prediction = mean(pred, na.rm = T), 
-                eastings = mean(eastings), northings = mean(northings))
-  })
-
-for(i in 1:length(mill_predictions_spatial_rf)) {
-  print(ggplot() + 
-    geom_tile(data = mill_predictions_spatial_rf[[i]], 
-              aes(x = eastings, y = northings, fill = mean_prediction)) + 
-      geom_point(data = mill, aes(x = eastings, y = northings),
-                 color = "light grey", size = 0.5) +
-      geom_point(data = mill[mill$Genus_species ==
-                               names(mill_predictions_spatial_rf)[i], ],
-                 aes(x = eastings, y = northings), color = "orange") +
-    ggtitle(paste0(names(mill_predictions_spatial_rf)[i], 
-                   " - spatial model"))
-  )
-}
-
-
-# environmental variables model
-mill_predictions_env_rf <- lapply(
-  mill_predictions_env_rf, FUN= function(x) {
-    group_by(x, hectad) %>%
-      summarise(mean_prediction = mean(pred, na.rm = T), 
-                eastings = mean(eastings), northings = mean(northings))
-  })
-
-for(i in 1:length(mill_predictions_env_rf)) {
-  print(ggplot() + 
-          geom_tile(data = mill_predictions_env_rf[[i]], 
-                    aes(x = eastings, y = northings, fill = mean_prediction)) + 
-          geom_point(data = mill, aes(x = eastings, y = northings),
-                     color = "light grey", size = 0.5) +
-          geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_env_rf)[i], ],
-                     aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_env_rf)[i], 
-                         " - environmental model"))
-  )
-}
-
-## plot variable importance
-mill_var_imp_spatial_rf <- lapply(
-  mill_var_imp_spatial_rf, FUN= function(x) {
-    group_by(x, variable) %>%
-      summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
-  })
-mill_var_imp_env_rf <- lapply(
-  mill_var_imp_env_rf, FUN= function(x) {
-    group_by(x, variable) %>%
-      summarise(MeanDecreaseGini = mean(MeanDecreaseGini))
-  })
-
-for(i in 1:length(mill_var_imp_spatial_rf)) {
-  print(ggplot(data = mill_var_imp_spatial_rf[[i]], 
-               aes(x = variable, y = MeanDecreaseGini)) + 
-          geom_bar(stat = "identity") + 
-          coord_flip() + 
-          ggtitle(paste0(names(mill_var_imp_spatial_rf)[i], 
-                         " - spatial model"))
-  )
-}
-
-for(i in 1:length(mill_var_imp_env_rf)) {
-  print(ggplot(data = mill_var_imp_env_rf[[i]], 
-               aes(x = variable, y = MeanDecreaseGini)) + 
-          geom_bar(stat = "identity") + 
-          coord_flip() + 
-          ggtitle(paste0(names(mill_var_imp_env_rf)[i], 
-                         " - environmental model"))
-  )
-}
 
 if(on_sonic) quit(save = "no")
