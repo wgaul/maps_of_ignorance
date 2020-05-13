@@ -12,6 +12,7 @@
 ## last modified: 13 May 2020
 ##############################
 library(pROC)
+library(psych)
 
 evals <- data.frame() # data frame to hold evaluation results
 
@@ -45,13 +46,13 @@ for(i in 1:length(test_points_ss)) {
 
 
 ## evaluate Day of Year + List Length models ----------------------------------
-# trained with no spatial subsampling
+# trained with raw data
 for(i in 1:length(sp_to_fit)) {
   fits <- readRDS(paste0("day_ll_rf_noSubSamp_fits_", 
                          gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
-  ## test against original data 
+  ## test against original (raw) data 
   # AUC --------------------------------------------------
   aucs <- lapply(fits, FUN = function(x, sp_name) {
     auc_iter <- lapply(x, FUN = function(y, sp_name) {
@@ -72,9 +73,45 @@ for(i in 1:length(sp_to_fit)) {
   evals <- bind_rows(evals, ev)
   rm(ev) # end AUC --------------------------------------
   
-  # sensitivity --------------------------------------
+  # Cohen's Kappa --------------------------------------
+  kappa_calc <- function(x, resp, pred) {
+    ## Function to calculate Cohen's Kappa using the best threshold
+    # make a 2 column df with observed responses (0 or 1) and a T/F whether the 
+    # predicted value is above threshold x.  These will be used to compute
+    # Cohen's kappa for agreement between categorical response (0, 1) and 
+    # categorical predictor (0, 1)
+    # ARGS: x - cutoff to test
+    #       resp - vector of observed responses (0 or 1)
+    #       pred - numeric vector of continuous predictions
+    vals <- data.frame(resp = factor(resp[!is.na(resp)]), 
+                       pred = factor(as.numeric(pred[!is.na(pred)] > x)))
+    psych::cohen.kappa(vals)$kappa
+  }
   
-  # end sensitivity ----------------------------------
+  kappas <- seq(from = 0, to = 1, by = 0.1) # Thresholds to try
+  names(kappas) <- kappas
+  
+  # get kappa for each fold
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "day_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -104,10 +141,41 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
+  rm(ev) # end AUC ----------------------------------------
   
+  # Kappa ------------------------------------
+  # get kappa for each fold
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
   
-  
-  rm(ev, fits)
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "day_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 
 # trained with spatial subsampling
@@ -134,7 +202,30 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "raw", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev) # end AUC -----------------------------------------
+  
+  # Kappa ----------------------------------------------
+  # get Kappa for each fold
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "day_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -164,7 +255,41 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev, fits)
+  rm(ev) 
+  
+  # Kappa ------------------------------------
+  # get kappa for each fold
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "day_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 ### end DOY + LL evaluation ---------------------------------------------------
 
@@ -195,6 +320,28 @@ for(i in 1:length(sp_to_fit)) {
   evals <- bind_rows(evals, ev)
   rm(ev)
   
+  # Kappa ------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
     auc_iter <- lapply(x, FUN = function(y, sp_name, test_data) {
@@ -223,7 +370,40 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev, fits)
+  rm(ev)
+  
+  # Kappa ------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 
 # trained with spatially subsampled data
@@ -251,6 +431,28 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
   rm(ev)
+  
+  # Kappa ----------------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -280,7 +482,40 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev, fits)
+  rm(ev)
+  
+  # Kappa ------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 ### end spatial + LL evaluation -----------------------------------------------
 
@@ -311,6 +546,28 @@ for(i in 1:length(sp_to_fit)) {
   evals <- bind_rows(evals, ev)
   rm(ev)
   
+  # Kappa ------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "env_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
     auc_iter <- lapply(x, FUN = function(y, sp_name, test_data) {
@@ -339,7 +596,40 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev, fits)
+  rm(ev)
+  
+  # Kappa ------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "env_ll_rf", 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 
 # trained with spatially subsampled data
@@ -367,6 +657,28 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
   rm(ev)
+  
+  # Kappa ----------------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas) {
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == sp_name], 
+                        pred = y$preds$pred[y$preds$test_fold == T])
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "env_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -396,27 +708,43 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
                    value = unlist(aucs))
   evals <- bind_rows(evals, ev)
-  rm(ev, fits)
+  rm(ev)
+  
+  # Kappa ------------------------------------
+  kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
+    kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_data) {
+      # get only subsampled test data that is in the spatial test blocks
+      test_data <- test_data[test_data$hectad %in% y$test_sites |
+                               test_data$hectad %in% 
+                               y$preds$hectad[y$preds$test_fold == T], ]
+      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # drop checklists not in the test fold (sometimes checlists in hectads 
+      # that are in "y$test_sites" are in different CV folds b/c cv block 
+      # boundary is within the hectad and checklists are at finer spatial 
+      # resolution)
+      test_data <- test_data[test_data$test_fold == T, ] 
+      tryCatch({
+        k_res <- sapply(kappas, kappa_calc, 
+                        resp = test_data[, colnames(test_data) == sp_name], 
+                        pred = test_data$pred)
+        # return kappa and threshold that maximised kappa
+        k_res[k_res == max(k_res)][1]}, 
+        error = function(x) NA)
+    }, sp_name = sp_name, kappas = kappas, test_data = test_data)
+  }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
+  test_data = test_points_ss[[i]]$test_points_subsampled)
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = "env_ll_rf", 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   value = unlist(kp))
+  evals <- bind_rows(evals, ev)
+  rm(ev) # end Kappa ----------------------------------
+  rm(fits)
 }
 ### end env + LL evaluation ---------------------------------------------------
 
 
 
-
-# # get AUC for each fold & each model
-# rf_performance <- expand.grid(fold = 1:n_folds, 
-#                               species = names(sp_to_fit),
-#                               model = c("doy_ll", "spatial", "environmental"),
-#                               stringsAsFactors = FALSE)
-# rf_performance$metric <- "AUC"
-# rf_performance$value <- NA
-# rf_performance$value[rf_performance$model == "doy_ll"] <- sapply(
-#   day_ll_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)})})
-# rf_performance$value[rf_performance$model == "spatial"] <- sapply(
-#   spatial_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)})})
-# rf_performance$value[rf_performance$model == "environmental"] <- sapply(
-#   env_rf_fits, FUN = function(x) {sapply(x, FUN = function(y) {
-#     tryCatch(y$auc, error = function(x) NA)})})
 
