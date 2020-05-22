@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 20 May 2020
+## last modified: 22 May 2020
 ##############################
 
 on_sonic <- F
@@ -18,12 +18,12 @@ on_sonic <- F
 # load objects that are needed to fit SDMs
 mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
-fold_assignments_10k <- readRDS("fold_assignments_10k.rds")
+fold_assignments <- readRDS("fold_assignments.rds")
 block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
 
 ### fit random forest ---------------------------------------------------------
 fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata, 
-                   sp_df_original, mtry) {
+                   sp_df_original, mtry, block_cv_range) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
   #       sp_name - character string giving the name of the column with 
   #                 detection/non-detection data to use
@@ -96,7 +96,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
                                                   pred_names)],
       y = factor(sp_df[sp_df$folds != test_fold, which(colnames(sp_df) == 
                                                          sp_name)]),
-      ntree = 2000, 
+      ntree = 1000, 
       mtry = mtry,   # use mtry_best if I want to fit model with optimum mtry 
       nodesize = 1, 
       replace = TRUE, classwt = NULL, 
@@ -134,12 +134,15 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # drop predictor variables from predictions dataframe 
   newdata <- select(newdata, hectad, eastings, northings, cells,
                     list_length, day_of_year, folds, test_fold, pred)
-  
+ 
   # return fitted model, and predictions for this model
   tryCatch(list(
     m = mod, preds = preds, standardized_preds = newdata, 
     train_sites = unique(newdata$hectad[newdata$folds != test_fold]), 
-    test_sites = unique(newdata$hectad[newdata$folds == test_fold])), 
+    test_sites = unique(newdata$hectad[newdata$folds == test_fold]), 
+    block_cv_range = block_cv_range, 
+    n_detections_test_fold = try(sum(sp_df[sp_df$folds == test_fold, 
+                                           sp_name]))), 
     error = function(x) "No list exported from fit_rf.")
 }
 
@@ -184,7 +187,7 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   if(spatial.under.sample) {
     # add a column of subsampling block assignments by chosing randomly from
     # the many allocatins created in "prepare_objects_for_SDM.R"
-    sp_df$spat_subsamp_cell <- block_subsamp[, sample(2:ncol(block_subsamp), 
+    sp_df$spat_subsamp_cell <- block_subsamp[, sample(2:(ncol(block_subsamp)-1), 
                                                          size = 1)]
     # spatially sub-sample absence checklists to 1 per cell
     # separate presence and absence checklists.  Keep all presence checklists.
@@ -213,7 +216,8 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   # fit RF
   lapply(1:n_folds, FUN = fit_rf, sp_name = sp_name, 
          sp_df = sp_df, pred_names = pred_names, newdata = newdata, 
-         sp_df_original = sp_df_original, mtry = mtry)
+         sp_df_original = sp_df_original, mtry = mtry, 
+         block_cv_range = fold_assignments$range)
 }
 
 
@@ -222,7 +226,7 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  day_ll_rf_fits <- mclapply(fold_assignments_10k, 
+  day_ll_rf_fits <- mclapply(fold_assignments, 
                              sp_name = sp_name, 
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
@@ -241,7 +245,7 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially subsampled data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  day_ll_rf_fits <- mclapply(fold_assignments_10k, 
+  day_ll_rf_fits <- mclapply(fold_assignments, 
                              sp_name = sp_name, 
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
@@ -258,11 +262,11 @@ for(i in 1:length(sp_to_fit)) {
 }
 ### end Day of Year + List Length --------------------------------------------
 
-### fit Spatial + List Length models -----------------------------------------
+### fit Spatial + List Length + DOY models -----------------------------------
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  spat_rf_fits <- mclapply(fold_assignments_10k, 
+  spat_rf_fits <- mclapply(fold_assignments, 
                            sp_name = sp_name, 
                            FUN = call_fit_rf, 
                            sp_df = mill_wide, 
@@ -295,7 +299,7 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially undersampled data 
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  spat_rf_fits <- mclapply(fold_assignments_10k, 
+  spat_rf_fits <- mclapply(fold_assignments, 
                            sp_name = sp_name, 
                            FUN = call_fit_rf, 
                            sp_df = mill_wide, 
@@ -325,14 +329,14 @@ for(i in 1:length(sp_to_fit)) {
   
   rm(spat_rf_fits, mill_predictions)
 }
-### end spatial + List Length models ------------------------------------------
+### end spatial + List Length + DOY models ------------------------------------
 
 
 ### fit environmental + LL + DOY model ----------------------------------------
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments_10k, 
+  env_rf_fits <- mclapply(fold_assignments, 
                           sp_name = sp_name, 
                           FUN = call_fit_rf, 
                           sp_df = mill_wide, 
@@ -369,7 +373,7 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially subsampled data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments_10k, 
+  env_rf_fits <- mclapply(fold_assignments, 
                           sp_name = sp_name, 
                           FUN = call_fit_rf, 
                           sp_df = mill_wide, 

@@ -53,22 +53,26 @@ if(make_spatial_blocks) {
   # spatialAutoRange(pred_brick, sampleNumber = 1000, 
   #                  nCores = 3, showPlots = TRUE, plotVariograms = FALSE)
   
+  
   ## make spatial blocks for CV testing
   # Make multiple different CV splits
-  fold_assignments_10k <- list()
+  fold_assignments <- list()
   for(i in 1:n_cv_trials) {
-    fold_assignments_10k[[i]] <- spatialBlock(
-      mill_spat, 
-      theRange = 100000, 
-      k = n_folds, 
-      selection = "random", 
-      iteration = 5, 
-      showBlocks = TRUE, 
-      xOffset = runif(n = 1, min = 0, max = 1), 
-      yOffset = runif(n = 1, min = 0, max = 1),
-      rasterLayer = pred_brick$pasture_l2, 
-      biomod2Format = FALSE)
+    for(j in 1:length(cv_block_sizes)) {
+      fold_assignments[[length(fold_assignments) + 1]] <- spatialBlock(
+        mill_spat, 
+        theRange = cv_block_sizes[j], 
+        k = n_folds, 
+        selection = "random", 
+        iteration = 5, 
+        showBlocks = TRUE, 
+        xOffset = runif(n = 1, min = 0, max = 1), 
+        yOffset = runif(n = 1, min = 0, max = 1),
+        rasterLayer = pred_brick$pasture_l2, 
+        biomod2Format = FALSE)
+    }
   }
+  
   
   # make many smaller blocks for spatial undersampling of test (and training) 
   # data get many different block configurations by making a df, where each 
@@ -78,7 +82,7 @@ if(make_spatial_blocks) {
   checklists_spat <- mill_wide[ , "checklist_ID"] # make df of checklists
   block_subsamp_10k <- checklists_spat
   
-  for(i in 1:2000) {
+  for(i in 1:20) {
     b_subsamp <- spatialBlock(checklists_spat, 
                               theRange = 30000,
                               k = n_folds, 
@@ -125,6 +129,6 @@ newdata <- SpatialPointsDataFrame(
 saveRDS(mill_wide, "mill_wide.rds")
 if(make_spatial_blocks) {
   try(saveRDS(block_subsamp_10k, "block_subsamp_10k.rds"))
-  try(saveRDS(fold_assignments_10k, "fold_assignments_10k.rds"))
+  try(saveRDS(fold_assignments, "fold_assignments.rds"))
 }
 saveRDS(newdata, "newdata.rds")

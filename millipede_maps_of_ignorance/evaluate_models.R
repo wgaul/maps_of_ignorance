@@ -9,7 +9,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 20 May 2020
+## last modified: 22 May 2020
 ##############################
 library(pROC)
 library(psych)
@@ -23,28 +23,34 @@ mill_wide_df <- data.frame(mill_wide)
 for(i in 1:length(test_points_ss)) {
   mill_wide_df[, colnames(mill_wide_df) == names(test_points_ss)[i]] <- pa(
     mill_wide_df[, colnames(mill_wide_df) == names(test_points_ss)[i]])
-  # add a column of subsampling block assignments by chosing randomly from
-  # the many allocatins created in "prepare_objects_for_SDM.R"
-  mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
-    2:ncol(block_subsamp_10k), size = 1)]
-  # separate presence and absence checklists.  Keep all presence checklists.
-  presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
-                                           names(test_points_ss)[i]] > 0, ]
-  absences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
-                                          names(test_points_ss)[i]] == 0, ]
   
-  # spatially sub-sample absence checklists to 1 per cell
-  cell_abs_tab <- table(absences$spat_subsamp_cell)
-  keep_ab_rows <- c()
-  for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
-    cell <- unique(absences$spat_subsamp_cell)[ri]
-    keep_ab_rows <- c(keep_ab_rows, 
-                      sample(which(absences$spat_subsamp_cell == cell), 
-                             size = 1))
+  test_points_ss[[i]] <- list()
+  # make a large number of different spatially subsampled test points datasets 
+  # to choose from so each test (i.e. each model in a CV fold) is tested with a 
+  # different set.  Use the subsample block designations created earlier.
+  for(j in 1:2000) {
+    # add a column of subsampling block assignments by chosing randomly from
+    # the many allocatins created in "prepare_objects_for_SDM.R"
+    mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
+      2:(ncol(block_subsamp_10k)-1), size = 1)]
+    # separate presence and absence checklists.  Keep all presence checklists.
+    presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
+                                             names(test_points_ss)[i]] > 0, ]
+    absences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
+                                            names(test_points_ss)[i]] == 0, ]
+    # spatially sub-sample absence checklists to 1 per cell
+    cell_abs_tab <- table(absences$spat_subsamp_cell)
+    keep_ab_rows <- c()
+    for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
+      cell <- unique(absences$spat_subsamp_cell)[ri]
+      keep_ab_rows <- c(keep_ab_rows, 
+                        sample(which(absences$spat_subsamp_cell == cell), 
+                               size = 1))
+    }
+    absences <- absences[keep_ab_rows, ] 
+    # combine spatially sub-sampled non-detection data with all detection data
+    test_points_ss[[i]][[j]] <- bind_rows(absences, presences) 
   }
-  absences <- absences[keep_ab_rows, ] 
-  # combine spatially sub-sampled non-detection data with all detection data
-  test_points_ss[[i]]$test_points_subsampled <- bind_rows(absences, presences)
 }
 ## end get spatially subsampled test points ------------------------------------
 
@@ -69,13 +75,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end AUC --------------------------------------
+  rm(ev, block_ranges) # end AUC --------------------------------------
   
   # Cohen's Kappa --------------------------------------
   kappa_calc <- function(x, resp, pred) {
@@ -109,13 +121,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -137,15 +155,22 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]), 
+                                         size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end AUC ----------------------------------------
+  rm(ev, block_ranges) # end AUC ----------------------------------------
   
   # Kappa ------------------------------------
   # get kappa for each fold
@@ -170,15 +195,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 
@@ -200,13 +231,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end AUC -----------------------------------------
+  rm(ev, block_ranges) # end AUC -----------------------------------------
   
   # Kappa ----------------------------------------------
   # get Kappa for each fold
@@ -223,13 +260,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -251,15 +294,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) 
+  rm(ev, block_ranges) 
   
   # Kappa ------------------------------------
   # get kappa for each fold
@@ -284,15 +333,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "day_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 ### end DOY + LL evaluation ---------------------------------------------------
@@ -316,13 +371,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas) {
@@ -338,13 +399,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -366,15 +433,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
@@ -398,15 +471,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 
@@ -428,13 +507,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ----------------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas) {
@@ -450,13 +535,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -478,15 +569,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
@@ -510,15 +607,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "spat_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 ### end spatial + LL evaluation -----------------------------------------------
@@ -542,13 +645,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas) {
@@ -564,13 +673,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -592,15 +707,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
@@ -624,15 +745,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 
@@ -654,13 +781,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name)
   }, sp_name = sp_to_fit[[i]])
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ----------------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas) {
@@ -676,13 +809,19 @@ for(i in 1:length(sp_to_fit)) {
     }, sp_name = sp_name, kappas = kappas)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas)
   
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -704,15 +843,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, test_data = test_data)
   }, sp_name = sp_to_fit[[i]], 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "AUC", 
-                   value = unlist(aucs))
+                   value = unlist(aucs), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev)
+  rm(ev, block_ranges)
   
   # Kappa ------------------------------------
   kp <- lapply(fits, function(x, sp_name, kappas, test_data) {
@@ -736,15 +881,21 @@ for(i in 1:length(sp_to_fit)) {
         error = function(x) NA)
     }, sp_name = sp_name, kappas = kappas, test_data = test_data)
   }, sp_name = gsub(" ", ".", sp_to_fit[[i]]), kappas = kappas, 
-  test_data = test_points_ss[[i]]$test_points_subsampled)
+  test_data = test_points_ss[[i]][sample(1:length(test_points_ss[[i]]),                                           size = 1)])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = "env_ll_rf", 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
-                   value = unlist(kp))
+                   value = unlist(kp), 
+                   block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev) # end Kappa ----------------------------------
+  rm(ev, block_ranges) # end Kappa ----------------------------------
   rm(fits)
 }
 ### end env + LL evaluation ---------------------------------------------------

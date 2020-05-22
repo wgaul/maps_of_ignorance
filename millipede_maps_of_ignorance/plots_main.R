@@ -58,7 +58,21 @@ ggplot(data = evals[evals$metric == "Kappa", ],
   theme(text = element_text(size = t_size))
 
 
-
+# look at effect of block CV range size
+ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ], 
+       aes(x = factor(block_cv_range), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                                     "\nEnvironment +\nDOY +\nList Length\n", 
+                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(train_data, 
+                               levels = c("raw", "spat_subsamp"), 
+                               labels = c("raw", "spatially\nundersampled"))) + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8)
 
 
 # plot average of predictions from all 5 folds (so 4 predictions will be to

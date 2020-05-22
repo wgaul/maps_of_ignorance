@@ -9,8 +9,10 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 20 May 2020
+## last modified: 22 May 2020
 #################################
+warning("TODO: 21 May 2020: Re-set the number of spatial undersamplingn block configurations to make to a higher number (e.g. 2000 or something much more than the number of models to test and fit).")
+
 rm(list = ls())
 dbg <- F
 calc_1k_distances <- F # run distances for 1km grid (might take a long time)
@@ -19,10 +21,11 @@ set.seed(seed)
 
 fit_brt <- F
 fit_rf <- T
-make_sampling_plots <- F
-make_spatial_blocks <- F # takes a few minutes. Set to T for final run
+make_sampling_plots <- T
+make_spatial_blocks <- T # takes a few minutes. Set to T for final run
 n_folds <- 5 # number of cross-validation folds to use
 n_cv_trials <- 3 # number of different cross-validation fold layouts to use
+cv_block_sizes <- c(20000, 100000) # sizes of CV spatial blocks (in meters)
 
 library(wgutil)
 library(Hmisc)
@@ -46,10 +49,10 @@ source("functions_maps_of_ignorance.R")
 
 n_cores <- 3
 
-sp_to_fit <- list("Tachypodoiulus niger", 
+sp_to_fit <- list("Julus scandinavius", 
                   "Ommatoiulus sabulosus")
 # "Ophyiulus pilosus", "Blaniulus guttulatus", "Glomeris marginata", 
-# "Julus scandinavius", 
+# "Tachypodoiulus niger", 
 names(sp_to_fit) <- sp_to_fit
 
 source("prepare_data.R")
