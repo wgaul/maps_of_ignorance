@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 11 May 2020
+## last modified: 20 May 2020
 #################################
 rm(list = ls())
 dbg <- F
@@ -20,6 +20,7 @@ set.seed(seed)
 fit_brt <- F
 fit_rf <- T
 make_sampling_plots <- F
+make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 n_folds <- 5 # number of cross-validation folds to use
 n_cv_trials <- 3 # number of different cross-validation fold layouts to use
 
@@ -39,10 +40,17 @@ library(dismo)
 #library(rgeos)
 library(lubridate)
 library(tidyverse)
+library(randomForest)
 
 source("functions_maps_of_ignorance.R")
 
 n_cores <- 3
+
+sp_to_fit <- list("Tachypodoiulus niger", 
+                  "Ommatoiulus sabulosus")
+# "Ophyiulus pilosus", "Blaniulus guttulatus", "Glomeris marginata", 
+# "Julus scandinavius", 
+names(sp_to_fit) <- sp_to_fit
 
 source("prepare_data.R")
 source("prepare_objects_for_SDM.R")

@@ -9,7 +9,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 13 May 2020
+## last modified: 20 May 2020
 ##############################
 library(pROC)
 library(psych)
@@ -23,6 +23,10 @@ mill_wide_df <- data.frame(mill_wide)
 for(i in 1:length(test_points_ss)) {
   mill_wide_df[, colnames(mill_wide_df) == names(test_points_ss)[i]] <- pa(
     mill_wide_df[, colnames(mill_wide_df) == names(test_points_ss)[i]])
+  # add a column of subsampling block assignments by chosing randomly from
+  # the many allocatins created in "prepare_objects_for_SDM.R"
+  mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
+    2:ncol(block_subsamp_10k), size = 1)]
   # separate presence and absence checklists.  Keep all presence checklists.
   presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
                                            names(test_points_ss)[i]] > 0, ]

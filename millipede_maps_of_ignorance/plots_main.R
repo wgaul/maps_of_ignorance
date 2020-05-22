@@ -20,9 +20,9 @@ ggplot(data = evals[evals$metric == "AUC", ],
            y = value, 
            color = factor(model, 
                           levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                                     "\nEnvironment +\nDOY +\nList Length\n", 
+                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -30,8 +30,8 @@ ggplot(data = evals[evals$metric == "AUC", ],
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("AUC\n(block Cross-Validated)") + 
-  scale_color_viridis_d(name = "Model", option = "magma", 
-                        begin = 0.2, end = 0.7) + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
   theme_bw() + 
   theme(text = element_text(size = t_size))
 
@@ -52,8 +52,8 @@ ggplot(data = evals[evals$metric == "Kappa", ],
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Kappa\n(block Cross-Validated)") + 
-  scale_color_viridis_d(name = "Model", option = "magma", 
-                        begin = 0.2, end = 0.7) + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
   theme_bw() + 
   theme(text = element_text(size = t_size))
 
@@ -64,47 +64,53 @@ ggplot(data = evals[evals$metric == "Kappa", ],
 # plot average of predictions from all 5 folds (so 4 predictions will be to
 # training data, one prediction to test data in each grid cell)
 
-# spatial model
-mill_predictions_spatial_rf <- lapply(
-  mill_predictions_spatial_rf, FUN= function(x) {
+# spatial model - raw data
+mill_predictions_spat_rf_raw <- list(
+  `Ommatoiulus sabulosus` = readRDS("mill_predictions_spat_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
+  `Tachypodoiulus niger` = readRDS("mill_predictions_spat_rf_noSubSamp_Tachypodoiulus_niger.rds"))
+mill_predictions_spat_rf_raw <- lapply(
+  mill_predictions_spat_rf_raw, FUN= function(x) {
     group_by(x, hectad) %>%
       summarise(mean_prediction = mean(pred, na.rm = T), 
                 eastings = mean(eastings), northings = mean(northings))
   })
 
-for(i in 1:length(mill_predictions_spatial_rf)) {
+for(i in 1:length(mill_predictions_spat_rf_raw)) {
   print(ggplot() + 
-          geom_tile(data = mill_predictions_spatial_rf[[i]], 
+          geom_tile(data = mill_predictions_spat_rf_raw[[i]], 
                     aes(x = eastings, y = northings, fill = mean_prediction)) + 
           geom_point(data = mill, aes(x = eastings, y = northings),
                      color = "light grey", size = 0.5) +
           geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_spatial_rf)[i], ],
+                                   names(mill_predictions_spat_rf_raw)[i], ],
                      aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_spatial_rf)[i], 
+          ggtitle(paste0(names(mill_predictions_spat_rf_raw)[i], 
                          " - spatial model"))
   )
 }
 
 
-# environmental variables model
-mill_predictions_env_rf <- lapply(
-  mill_predictions_env_rf, FUN= function(x) {
+# environmental variables model - raw data
+mill_predictions_env_rf_raw <- list(
+  `Ommatoiulus sabulosus` = readRDS("mill_predictions_env_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
+  `Tachypodoiulus niger` = readRDS("mill_predictions_env_rf_noSubSamp_Tachypodoiulus_niger.rds"))
+mill_predictions_env_rf_raw <- lapply(
+  mill_predictions_env_rf_raw, FUN= function(x) {
     group_by(x, hectad) %>%
       summarise(mean_prediction = mean(pred, na.rm = T), 
                 eastings = mean(eastings), northings = mean(northings))
   })
 
-for(i in 1:length(mill_predictions_env_rf)) {
+for(i in 1:length(mill_predictions_env_rf_raw)) {
   print(ggplot() + 
-          geom_tile(data = mill_predictions_env_rf[[i]], 
+          geom_tile(data = mill_predictions_env_rf_raw[[i]], 
                     aes(x = eastings, y = northings, fill = mean_prediction)) + 
           geom_point(data = mill, aes(x = eastings, y = northings),
                      color = "light grey", size = 0.5) +
           geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_env_rf)[i], ],
+                                   names(mill_predictions_env_rf_raw)[i], ],
                      aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_env_rf)[i], 
+          ggtitle(paste0(names(mill_predictions_env_rf_raw)[i], 
                          " - environmental model"))
   )
 }

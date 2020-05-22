@@ -10,34 +10,30 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 13 May 2020
+## last modified: 20 May 2020
 ##############################
-library(randomForest)
-library(parallel)
-library(tidyverse)
-on_sonic <- F
 
-sp_to_fit <- list("Tachypodoiulus niger", 
-                  "Ommatoiulus sabulosus")
-# "Ophyiulus pilosus", "Blaniulus guttulatus", "Glomeris marginata", 
-# "Julus scandinavius", 
-names(sp_to_fit) <- sp_to_fit
+on_sonic <- F
 
 # load objects that are needed to fit SDMs
 mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
+fold_assignments_10k <- readRDS("fold_assignments_10k.rds")
+block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
 
 ### fit random forest ---------------------------------------------------------
 fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata, 
-                   sp_df_original) {
+                   sp_df_original, mtry) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
   #       sp_name - character string giving the name of the column with 
   #                 detection/non-detection data to use
-  #       sp_df - data frame with species observations and a column called 
+  #       sp_df - data frame to be used for model fitting (possibly 
+  #               undersampled), with species observations and a column called 
   #               "folds" giving the cross-validation folds each record is in
   #       pred_names - character vector giving the variables to use as 
   #       predictors
   #       newdata - new data for predictions with standardized recording effort
+  #       sp_df_original - the original (not undersampled) data
   if(is_tibble(sp_df)) {
     sp_df <- data.frame(sp_df)
   }
@@ -54,41 +50,44 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   sp_df$test_fold <- sp_df$folds == test_fold
   sp_df_original$test_fold <- sp_df_original$folds == test_fold
 
-  for(k in 1:length(mtry_tests)) {
-    m_k <- tryCatch(randomForest(
-      x = sp_df[sp_df$folds != test_fold, colnames(sp_df) %in% pred_names],
-      y = factor(sp_df[sp_df$folds != test_fold, colnames(sp_df) == sp_name]),
-      ntree = 1000, 
-      mtry = mtry_tests[k], 
-      nodesize = 3, 
-      replace = TRUE, classwt = NULL, 
-      importance = FALSE, 
-      keep.forest = FALSE), 
-      error = function(x) NA)
-    
-    # if error from this model is lowest so far, keep this model
-    if(class(m_k) == "randomForest" && 
-       !is.na(m_k$err.rate[nrow(m_k$err.rate), "OOB"])) {
-      mtry_err[k] <- m_k$err.rate[nrow(m_k$err.rate), "OOB"] # error for this mtry
-    }
-  }
+  # ### ---- test mtry. (if I want to do this later) ---------------------
+  # ### As of 20 May, I will not do this and will just use the square root of the
+  # ### number of predictor variables, following Robinson et al. (2018) and 
+  # ### references in that
+  # for(k in 1:length(mtry_tests)) {
+  #   m_k <- tryCatch(randomForest(
+  #     x = sp_df[sp_df$folds != test_fold, colnames(sp_df) %in% pred_names],
+  #     y = factor(sp_df[sp_df$folds != test_fold, colnames(sp_df) == sp_name]),
+  #     ntree = 1000, 
+  #     mtry = mtry_tests[k], 
+  #     nodesize = 3, 
+  #     replace = TRUE, classwt = NULL, 
+  #     importance = FALSE, 
+  #     keep.forest = FALSE), 
+  #     error = function(x) NA)
+  #   
+  #   # if error from this model is lowest so far, keep this model
+  #   if(class(m_k) == "randomForest" && 
+  #      !is.na(m_k$err.rate[nrow(m_k$err.rate), "OOB"])) {
+  #     mtry_err[k] <- m_k$err.rate[nrow(m_k$err.rate), "OOB"] # error for this mtry
+  #   }
+  # }
+  # 
+  # # get best mtry value.  If multiply mtry values tied for best error rate,
+  # # use the one that is closest to the square root of the number of variables
+  # if(length(which(mtry_err == min(mtry_err))) > 1) {
+  #   # calculate the distance of each tied "best" mtry value from the default
+  #   dist_from_default <- tryCatch({
+  #     abs(mtry_tests[mtry_err == min(mtry_err)] - sqrt(nvar))}, 
+  #     error = function(x) NA)
+  #   # keep the mtry value that is closest to the default
+  #   mtry_best <- tryCatch({
+  #     mtry_tests[mtry_err == min(mtry_err)][dist_from_default == 
+  #                                             min(dist_from_default)]}, 
+  #     error = function(x) NA)
+  # } else mtry_best <- tryCatch(mtry_tests[mtry_err == min(mtry_err)], 
+  #                              error = function(x) NA)
   
-  # get best mtry value.  If multiply mtry values tied for best error rate,
-  # use the one that is closest to the square root of the number of variables
-  if(length(which(mtry_err == min(mtry_err))) > 1) {
-    # calculate the distance of each tied "best" mtry value from the default
-    dist_from_default <- tryCatch({
-      abs(mtry_tests[mtry_err == min(mtry_err)] - sqrt(nvar))}, 
-      error = function(x) NA)
-    # keep the mtry value that is closest to the default
-    mtry_best <- tryCatch({
-      mtry_tests[mtry_err == min(mtry_err)][dist_from_default == 
-                                              min(dist_from_default)]}, 
-      error = function(x) NA)
-  } else mtry_best <- tryCatch(mtry_tests[mtry_err == min(mtry_err)], 
-                               error = function(x) NA)
-  
-  # fit model with optimum mtry 
   # use 2000 trees which is hopefully high enough to get stable variable
   # importance if I want it (see manual linked in help documentation)
   mod <- tryCatch({
@@ -97,8 +96,8 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
                                                   pred_names)],
       y = factor(sp_df[sp_df$folds != test_fold, which(colnames(sp_df) == 
                                                          sp_name)]),
-      ntree = 1000, 
-      mtry = mtry_best, 
+      ntree = 2000, 
+      mtry = mtry,   # use mtry_best if I want to fit model with optimum mtry 
       nodesize = 1, 
       replace = TRUE, classwt = NULL, 
       importance = FALSE, 
@@ -119,8 +118,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
     error = function(x) NA)
   # select columns to keep in df of predictions
   preds <- sp_df_original[ , c("checklist_ID", "eastings", "northings", 
-                               "hectad", "folds", "test_fold",
-                               "spat_subsamp_cell", sp_name)]
+                               "hectad", "folds", "test_fold", sp_name)]
   preds$pred <- f_pred # add predictions to df
 
   # make dataframe of predictions with standardized recording effort
@@ -147,7 +145,8 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
 
 
 call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df, 
-                        pred_names, spatial.under.sample, ...) {
+                        pred_names, spatial.under.sample, block_subsamp, mtry, 
+                        ...) {
   # Function to call fit_rf on each species in a list of species dfs
   # First spatially sub-sample non-detection records to even absence records
   # and improve class balance (presuming sp. is rare)  
@@ -183,10 +182,14 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   sp_df_original <- sp_df
   
   if(spatial.under.sample) {
+    # add a column of subsampling block assignments by chosing randomly from
+    # the many allocatins created in "prepare_objects_for_SDM.R"
+    sp_df$spat_subsamp_cell <- block_subsamp[, sample(2:ncol(block_subsamp), 
+                                                         size = 1)]
+    # spatially sub-sample absence checklists to 1 per cell
     # separate presence and absence checklists.  Keep all presence checklists.
     presences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 1, ]
     absences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 0, ]
-    # spatially sub-sample absence checklists to 1 per cell
     cell_abs_tab <- table(absences$spat_subsamp_cell)
     keep_ab_rows <- c()
     for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
@@ -210,7 +213,7 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   # fit RF
   lapply(1:n_folds, FUN = fit_rf, sp_name = sp_name, 
          sp_df = sp_df, pred_names = pred_names, newdata = newdata, 
-         sp_df_original = sp_df_original)
+         sp_df_original = sp_df_original, mtry = mtry)
 }
 
 
@@ -224,7 +227,9 @@ for(i in 1:length(sp_to_fit)) {
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
                              pred_names = c("day_of_year", "list_length"),
+                             block_subsamp = block_subsamp_10k, 
                              spatial.under.sample = FALSE, 
+                             mtry = 1, 
                              mc.cores = n_cores)
   try(print(pryr::object_size(day_ll_rf_fits)))
   try(saveRDS(day_ll_rf_fits, paste0("day_ll_rf_noSubSamp_fits_", 
@@ -241,7 +246,9 @@ for(i in 1:length(sp_to_fit)) {
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
                              pred_names = c("day_of_year", "list_length"),
+                             block_subsamp = block_subsamp_10k, 
                              spatial.under.sample = TRUE, 
+                             mtry = 1,
                              mc.cores = n_cores)
   try(print(pryr::object_size(day_ll_rf_fits)))
   try(saveRDS(day_ll_rf_fits, paste0("day_ll_rf_SubSamp_fits_", 
@@ -261,7 +268,9 @@ for(i in 1:length(sp_to_fit)) {
                            sp_df = mill_wide, 
                            pred_names = c("eastings", "northings", 
                                           "day_of_year", "list_length"),
+                           block_subsamp = block_subsamp_10k, 
                            spatial.under.sample = FALSE, 
+                           mtry = 2, 
                            mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
   try(saveRDS(spat_rf_fits, paste0("spat_rf_noSubSamp_fits_", 
@@ -292,7 +301,9 @@ for(i in 1:length(sp_to_fit)) {
                            sp_df = mill_wide, 
                            pred_names = c("eastings", "northings", 
                                           "day_of_year", "list_length"),
+                           block_subsamp = block_subsamp_10k, 
                            spatial.under.sample = TRUE, 
+                           mtry = 2, 
                            mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
   try(saveRDS(spat_rf_fits, paste0("spat_rf_SubSamp_fits_", 
@@ -322,21 +333,23 @@ for(i in 1:length(sp_to_fit)) {
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
   env_rf_fits <- mclapply(fold_assignments_10k, 
-                           sp_name = sp_name, 
-                           FUN = call_fit_rf, 
-                           sp_df = mill_wide, 
-                           pred_names = c("mean_tn", "mean_tx", 
-                                          "mean_rr", "artificial_surfaces", 
-                                          "forest_seminatural_l1", 
-                                          "wetlands_l1", "pasture_l2", 
-                                          "arable_l2", "elev", 
-                                          "day_of_year", "list_length"),
-                           spatial.under.sample = FALSE, 
-                           mc.cores = n_cores)
+                          sp_name = sp_name, 
+                          FUN = call_fit_rf, 
+                          sp_df = mill_wide, 
+                          pred_names = c("mean_tn", "mean_tx", 
+                                         "mean_rr", "artificial_surfaces", 
+                                         "forest_seminatural_l1", 
+                                         "wetlands_l1", "pasture_l2", 
+                                         "arable_l2", "elev", 
+                                         "day_of_year", "list_length"),
+                          block_subsamp = block_subsamp_10k, 
+                          spatial.under.sample = FALSE, 
+                          mtry = 3, 
+                          mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
   try(saveRDS(env_rf_fits, paste0("env_rf_noSubSamp_fits_", 
-                                   gsub(" ", "_", sp_name),
-                                   ".rds")))
+                                  gsub(" ", "_", sp_name),
+                                  ".rds")))
   
   # retrieve predictions with standardized sampling effort
   mill_predictions <- lapply(
@@ -366,7 +379,9 @@ for(i in 1:length(sp_to_fit)) {
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
                                          "day_of_year", "list_length"),
+                          block_subsamp = block_subsamp_10k, 
                           spatial.under.sample = TRUE, 
+                          mtry = 3, 
                           mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
   try(saveRDS(env_rf_fits, paste0("env_rf_SubSamp_fits_", 
@@ -379,8 +394,8 @@ for(i in 1:length(sp_to_fit)) {
     FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
       tryCatch(x$standardized_preds, error = function(x) NA)})
     })
-  mill_predictions <- bind_rows(lapply(mill_predictions, 
-                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  mill_predictions <- bind_rows(
+    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
   try(saveRDS(mill_predictions, paste0("mill_predictions_env_rf_SubSamp_", 
                                        gsub(" ", "_", sp_name),

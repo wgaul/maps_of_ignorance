@@ -10,7 +10,7 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 24 Jan 2020
-## last modified: 11 May 2020
+## last modified: 20 May 2020
 ##############################
 library(blockCV)
 library(sf)
@@ -43,49 +43,64 @@ mill_wide <- mill_fewer_vars %>%
             by = "checklist_ID") %>%
   unique()
 
-
-### Make spatial block CV folds ------------------------------------------------
-# Find best block size using only a subset of all data (for memory efficiency)
-spatialAutoRange(pred_brick, sampleNumber = 1000, 
-                 nCores = 3, showPlots = TRUE, plotVariograms = FALSE)
-
-# make spatial blocks for CV testing
-# Make multiple different CV splits
-fold_assignments_10k <- list()
-for(i in 1:n_cv_trials) {
-  fold_assignments_10k[[i]] <- spatialBlock(mill_spat, 
-                                      theRange = 100000, 
-                                      k = n_folds, 
-                                      selection = "random", 
-                                      iteration = 5, 
-                                      showBlocks = TRUE, 
-                                      xOffset = runif(n = 1, min = 0, max = 1), 
-                                      yOffset = runif(n = 1, min = 0, max = 1),
-                                      rasterLayer = pred_brick$pasture_l2, 
-                                      biomod2Format = FALSE)
-}
-
-# make smaller blocks for spatial undersampling of test (and training) data
-block_subsamp_mill_10k <- spatialBlock(mill_spat, 
-                                       theRange = 30000,
-                                       k = n_folds, 
-                                       selection = "random", 
-                                       iteration = 5, 
-                                       # rows = 20, cols = 20, 
-                                       xOffset = 0.01, yOffset = 0.01,
-                                       showBlocks = TRUE, 
-                                       rasterLayer = pred_brick$pasture_l2, 
-                                       biomod2Format = FALSE)
-
 mill_wide <- SpatialPointsDataFrame(
   coords = mill_wide[, c("eastings", "northings")], 
   data = mill_wide, proj4string = CRS("+init=epsg:29903"))
-# add spatial subsampling grid cell ID
-mill_wide <- st_join(
-  st_as_sf(mill_wide), 
-  st_as_sf(block_subsamp_mill_10k$blocks[, names(
-    block_subsamp_mill_10k$blocks) == "layer"]))
-colnames(mill_wide)[colnames(mill_wide) == "layer"] <- "spat_subsamp_cell"
+
+if(make_spatial_blocks) {
+  ### Make spatial block CV folds -------------------------------------------
+  # Find best block size using only a subset of all data (for memory efficiency)
+  # spatialAutoRange(pred_brick, sampleNumber = 1000, 
+  #                  nCores = 3, showPlots = TRUE, plotVariograms = FALSE)
+  
+  ## make spatial blocks for CV testing
+  # Make multiple different CV splits
+  fold_assignments_10k <- list()
+  for(i in 1:n_cv_trials) {
+    fold_assignments_10k[[i]] <- spatialBlock(
+      mill_spat, 
+      theRange = 100000, 
+      k = n_folds, 
+      selection = "random", 
+      iteration = 5, 
+      showBlocks = TRUE, 
+      xOffset = runif(n = 1, min = 0, max = 1), 
+      yOffset = runif(n = 1, min = 0, max = 1),
+      rasterLayer = pred_brick$pasture_l2, 
+      biomod2Format = FALSE)
+  }
+  
+  # make many smaller blocks for spatial undersampling of test (and training) 
+  # data get many different block configurations by making a df, where each 
+  # column is a different spatial block configuration and the rows are the 
+  # block assignemnts for each millipede record.
+  
+  checklists_spat <- mill_wide[ , "checklist_ID"] # make df of checklists
+  block_subsamp_10k <- checklists_spat
+  
+  for(i in 1:2000) {
+    b_subsamp <- spatialBlock(checklists_spat, 
+                              theRange = 30000,
+                              k = n_folds, 
+                              selection = "random", 
+                              iteration = 5, 
+                              # rows = 20, cols = 20, 
+                              xOffset = runif(n = 1, min = 0, max = 1), 
+                              yOffset = runif(n = 1, min = 0, max = 1),
+                              showBlocks = FALSE, 
+                              rasterLayer = pred_brick$pasture_l2, 
+                              biomod2Format = FALSE)
+    # add spatial subsampling grid cell ID
+    block_subsamp_10k <- st_join(
+      st_as_sf(block_subsamp_10k), 
+      st_as_sf(b_subsamp$blocks[, names(
+        b_subsamp$blocks) == "layer"]))
+  }
+  block_subsamp_10k <- data.frame(block_subsamp_10k)
+  # remove geometry column
+  block_subsamp_10k <- block_subsamp_10k[, -grepl(".*geomet.*", 
+                                                  colnames(block_subsamp_10k))]
+}
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort
@@ -108,4 +123,8 @@ newdata <- SpatialPointsDataFrame(
   proj4string = CRS("+init=epsg:29903"))
 ### save objects for use on sonic ---------------------------------------------
 saveRDS(mill_wide, "mill_wide.rds")
+if(make_spatial_blocks) {
+  try(saveRDS(block_subsamp_10k, "block_subsamp_10k.rds"))
+  try(saveRDS(fold_assignments_10k, "fold_assignments_10k.rds"))
+}
 saveRDS(newdata, "newdata.rds")
