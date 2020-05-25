@@ -79,26 +79,26 @@ ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ],
 # training data, one prediction to test data in each grid cell)
 
 # spatial model - raw data
-mill_predictions_spat_rf_raw <- list(
-  `Ommatoiulus sabulosus` = readRDS("mill_predictions_spat_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
-  `Tachypodoiulus niger` = readRDS("mill_predictions_spat_rf_noSubSamp_Tachypodoiulus_niger.rds"))
-mill_predictions_spat_rf_raw <- lapply(
-  mill_predictions_spat_rf_raw, FUN= function(x) {
+mill_predictions_spat_ll_rf_raw <- list(
+  `Ommatoiulus sabulosus` = readRDS("mill_predictions_spat_ll_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
+  `Tachypodoiulus niger` = readRDS("mill_predictions_spat_ll_rf_noSubSamp_Tachypodoiulus_niger.rds"))
+mill_predictions_spat_ll_rf_raw <- lapply(
+  mill_predictions_spat_ll_rf_raw, FUN= function(x) {
     group_by(x, hectad) %>%
       summarise(mean_prediction = mean(pred, na.rm = T), 
                 eastings = mean(eastings), northings = mean(northings))
   })
 
-for(i in 1:length(mill_predictions_spat_rf_raw)) {
+for(i in 1:length(mill_predictions_spat_ll_rf_raw)) {
   print(ggplot() + 
-          geom_tile(data = mill_predictions_spat_rf_raw[[i]], 
+          geom_tile(data = mill_predictions_spat_ll_rf_raw[[i]], 
                     aes(x = eastings, y = northings, fill = mean_prediction)) + 
           geom_point(data = mill, aes(x = eastings, y = northings),
                      color = "light grey", size = 0.5) +
           geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_spat_rf_raw)[i], ],
+                                   names(mill_predictions_spat_ll_rf_raw)[i], ],
                      aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_spat_rf_raw)[i], 
+          ggtitle(paste0(names(mill_predictions_spat_ll_rf_raw)[i], 
                          " - spatial model"))
   )
 }
@@ -160,3 +160,4 @@ for(i in 1:length(mill_var_imp_env_rf)) {
                          " - environmental model"))
   )
 }
+

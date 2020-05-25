@@ -277,7 +277,7 @@ for(i in 1:length(sp_to_fit)) {
                            mtry = 2, 
                            mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
-  try(saveRDS(spat_rf_fits, paste0("spat_rf_noSubSamp_fits_", 
+  try(saveRDS(spat_rf_fits, paste0("spat_ll_rf_noSubSamp_fits_", 
                                      gsub(" ", "_", sp_name),
                                      ".rds")))
   
@@ -290,7 +290,7 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(lapply(mill_predictions, 
                              FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_rf_noSubSamp_", 
+  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_ll_rf_noSubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(spat_rf_fits, mill_predictions)
@@ -310,7 +310,7 @@ for(i in 1:length(sp_to_fit)) {
                            mtry = 2, 
                            mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
-  try(saveRDS(spat_rf_fits, paste0("spat_rf_SubSamp_fits_", 
+  try(saveRDS(spat_rf_fits, paste0("spat_ll_rf_SubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
                                    ".rds")))
   
@@ -323,7 +323,7 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(
     lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_rf_SubSamp_", 
+  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_ll_rf_SubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   
@@ -351,7 +351,7 @@ for(i in 1:length(sp_to_fit)) {
                           mtry = 3, 
                           mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_rf_noSubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("env_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -364,7 +364,7 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(lapply(mill_predictions, 
                                        FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_env_rf_noSubSamp_", 
+  try(saveRDS(mill_predictions, paste0("mill_predictions_env_ll_rf_noSubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(env_rf_fits, mill_predictions)
@@ -388,7 +388,7 @@ for(i in 1:length(sp_to_fit)) {
                           mtry = 3, 
                           mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_rf_SubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("env_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -401,7 +401,7 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(
     lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_env_rf_SubSamp_", 
+  try(saveRDS(mill_predictions, paste0("mill_predictions_env_ll_rf_SubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(env_rf_fits, mill_predictions)
@@ -445,7 +445,7 @@ mill_var_imp_env_rf <- lapply(
 
 # save results
 
-try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_rf.rds"))
+try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_ll_rf.rds"))
 
 
 

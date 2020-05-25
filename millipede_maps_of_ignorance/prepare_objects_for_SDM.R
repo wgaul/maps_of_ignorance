@@ -10,7 +10,7 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 24 Jan 2020
-## last modified: 20 May 2020
+## last modified: 25 May 2020
 ##############################
 library(blockCV)
 library(sf)
@@ -82,7 +82,7 @@ if(make_spatial_blocks) {
   checklists_spat <- mill_wide[ , "checklist_ID"] # make df of checklists
   block_subsamp_10k <- checklists_spat
   
-  for(i in 1:20) {
+  for(i in 1:n_subsamp_block_draws) {
     b_subsamp <- spatialBlock(checklists_spat, 
                               theRange = 30000,
                               k = n_folds, 
@@ -104,6 +104,9 @@ if(make_spatial_blocks) {
   # remove geometry column
   block_subsamp_10k <- block_subsamp_10k[, -grepl(".*geomet.*", 
                                                   colnames(block_subsamp_10k))]
+} else {
+  block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
+  fold_assignments <- readRDS("fold_assignments.rds")
 }
 ### end make spatial blocks ---------------------------------------------------
 
