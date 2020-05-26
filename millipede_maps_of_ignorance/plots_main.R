@@ -9,11 +9,20 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 13 May 2020
+## last modified: 26 May 2020
 ##############################
-t_size <- 15
+t_size <- 12
 
-ggplot(data = evals[evals$metric == "AUC", ], 
+## plot results using random CV -----------------------------------------------
+# how many detections and non-detections in test folds?
+n_dets_long <- pivot_longer(n_dets_df, cols = n_det:n_non_det, 
+                            names_to = "detection")
+ggplot(data = n_dets_long, aes(x = detection, y = value, color = block_range)) +
+  geom_boxplot() + 
+  ggtitle("Number of detections and non-detections\nin individual CV folds\n(not this many will be used in testing if I spatially\nsubsample test data")
+
+ggplot(data = evals[evals$metric == "AUC" & 
+                      as.character(evals$block_cv_range) == "random", ], 
        aes(x = factor(train_data, 
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
@@ -30,12 +39,14 @@ ggplot(data = evals[evals$metric == "AUC", ],
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("AUC\n(block Cross-Validated)") + 
+  ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
   theme(text = element_text(size = t_size))
 
-ggplot(data = evals[evals$metric == "Kappa", ], 
+ggplot(data = evals[evals$metric == "Kappa" & 
+                      as.character(evals$block_cv_range) == "random", ], 
        aes(x = factor(train_data, 
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
@@ -52,10 +63,181 @@ ggplot(data = evals[evals$metric == "Kappa", ],
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Kappa\n(block Cross-Validated)") + 
+  ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
   theme(text = element_text(size = t_size))
+
+# plot sensitivity
+ggplot(data = evals[evals$metric == "sensitivity" & 
+                      as.character(evals$block_cv_range) == "random", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Sensitivity\n(block Cross-Validated)") + 
+  ggtitle("Random CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+
+# plot specificity
+ggplot(data = evals[evals$metric == "specificity" & 
+                      as.character(evals$block_cv_range) == "random", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Specificity\n(block Cross-Validated)") + 
+  ggtitle("Random CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+### end random CV -------------------------------------------------------------
+
+
+### plot results using 100km block CV -----------------------------------------
+ggplot(data = evals[evals$metric == "AUC" & 
+                      as.character(evals$block_cv_range) == "1e+05", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                                     "\nEnvironment +\nDOY +\nList Length\n", 
+                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("AUC\n(block Cross-Validated)") + 
+  ggtitle("100km block CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+ggplot(data = evals[evals$metric == "Kappa" & 
+                      as.character(evals$block_cv_range) == "1e+05", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Kappa\n(block Cross-Validated)") + 
+  ggtitle("100km block CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+# plot sensitivity
+ggplot(data = evals[evals$metric == "sensitivity" & 
+                      as.character(evals$block_cv_range) == "1e+05", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Sensitivity\n(block Cross-Validated)") + 
+  ggtitle("100km block CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+
+# plot specificity
+ggplot(data = evals[evals$metric == "specificity" & 
+                      as.character(evals$block_cv_range) == "1e+05", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Specificity\n(block Cross-Validated)") + 
+  ggtitle("100km block CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+### end 100km block CV ---------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # look at effect of block CV range size
@@ -73,6 +255,26 @@ ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ],
                                labels = c("raw", "spatially\nundersampled"))) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # plot average of predictions from all 5 folds (so 4 predictions will be to

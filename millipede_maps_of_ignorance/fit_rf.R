@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 22 May 2020
+## last modified: 26 May 2020
 ##############################
 
 on_sonic <- F
@@ -129,7 +129,12 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
     error = function(x) NA)
   
   # label test folds in case this is ever needed later
-  newdata$test_fold <- newdata$folds == test_fold
+  if("folds" %in% colnames(newdata)) {
+    newdata$test_fold <- tryCatch(newdata$folds == test_fold, 
+                                  error = function(x) NA)
+  } else {
+    newdata$folds <- NA
+    newdata$test_fold <- NA}
   
   # drop predictor variables from predictions dataframe 
   newdata <- select(newdata, hectad, eastings, northings, cells,
@@ -170,15 +175,23 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   #           "spat_subsamp_cell"
 
   # add CV fold assignments to sp_df
-  sp_df <- st_join(
-    st_as_sf(sp_df), 
-    st_as_sf(fold_assignments$blocks[, names(fold_assignments$blocks) ==
-                                       "folds"]))
-  if(is_tibble(sp_df) | "sf" %in% class(sp_df)) {
+  if(class(fold_assignments) == "SpatialBlock") {
+    sp_df <- st_join(
+      st_as_sf(sp_df), 
+      st_as_sf(fold_assignments$blocks[, names(fold_assignments$blocks) ==
+                                         "folds"]))
+  }
+  if(class(fold_assignments) == "list") { # add random CV blocks
+    sp_df$folds <- fold_assignments$blocks
+  }
+  
+  # convert to df from spatial
+  if(is_tibble(sp_df) | "sf" %in% class(sp_df) | 
+     "SpatialPointsDataFrame" %in% class(sp_df)) {
     sp_df <- data.frame(sp_df)
   }
-  sp_name <- gsub(" ", ".", sp_name)
   colnames(sp_df) <- gsub(" ", ".", colnames(sp_df))
+  sp_name <- gsub(" ", ".", sp_name)
  
   # convert species record counts to p/a
   sp_df[colnames(sp_df) == sp_name] <- pa(sp_df[colnames(sp_df) == sp_name])
@@ -207,10 +220,15 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
     sp_df <- bind_rows(absences, presences)
   }
 
-  newdata <- st_join(
-    st_as_sf(newdata), 
-    st_as_sf(fold_assignments$blocks[, names(fold_assignments$blocks) == 
-                                       "folds"]))
+  # if using block CV, assign newdata grid cells to CV fold
+  # if using random CV, the folds pertain to checklists, not locations, so all
+  # newdata locations are essentially in test set
+  if(class(fold_assignments) == "SpatialBlock") {
+    newdata <- st_join(
+      st_as_sf(newdata), 
+      st_as_sf(fold_assignments$blocks[, names(fold_assignments$blocks) == 
+                                         "folds"]))
+  }
   newdata <- data.frame(newdata)
   
   # fit RF

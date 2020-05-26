@@ -8,7 +8,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 25 May 2020
+## last modified: 26 May 2020
 ##############################
 library(pROC)
 library(psych)
@@ -27,26 +27,24 @@ for(i in 1:length(test_points_ss)) {
   # different set.  Use the subsample block designations created earlier.
   for(j in 1:n_subsamp_block_draws) {
     # add a column of subsampling block assignments by chosing randomly from
-    # the many allocatins created in "prepare_objects_for_SDM.R"
+    # the many allocations created in "prepare_objects_for_SDM.R"
     mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
       2:(ncol(block_subsamp_10k)-1), size = 1)]
-    # separate presence and absence checklists.  Keep all presence checklists.
-    presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
-                                             names(test_points_ss)[i]] > 0, ]
-    absences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
-                                            names(test_points_ss)[i]] == 0, ]
+
     # spatially sub-sample absence checklists to 1 per cell
-    cell_abs_tab <- table(absences$spat_subsamp_cell)
-    keep_ab_rows <- c()
-    for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
-      cell <- unique(absences$spat_subsamp_cell)[ri]
-      keep_ab_rows <- c(keep_ab_rows, 
-                        sample(which(absences$spat_subsamp_cell == cell), 
-                               size = 1))
+    # for testing, spatially subsample ALL data, so take only 1 checklist from 
+    # each cell (i.e. do not undersample by keeping all detections and only 
+    # spatially subsampling non-detections)
+    # cell_abs_tab <- table(absences$spat_subsamp_cell)
+    keep_rows <- c()
+    for(ri in 1:length(unique(mill_wide_df$spat_subsamp_cell))) {
+      cell <- unique(mill_wide_df$spat_subsamp_cell)[ri]
+      keep_rows <- c(keep_rows, 
+                     sample(which(mill_wide_df$spat_subsamp_cell == cell), 
+                            size = 2))
     }
-    absences <- absences[keep_ab_rows, ] 
-    # combine spatially sub-sampled non-detection data with all detection data
-    test_points_ss[[i]][[j]] <- bind_rows(absences, presences) 
+    # store this test datasets
+    test_points_ss[[i]][[j]] <- mill_wide_df[keep_rows, ]
   }
 }
 ## end get spatially subsampled test points ------------------------------------
@@ -77,6 +75,30 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  ndets <- lapply(fits, FUN = function(x, sp_name) {
+    det_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        # count number of detections in test fold
+        length(which(y$preds[y$preds$test_fold == TRUE, colnames(y$preds) %in% 
+                               gsub(" ", ".", sp_name)] > 0))}, 
+        error = function(x) NA)
+    } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
+  nnondets <- lapply(fits, FUN = function(x, sp_name) {
+    det_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        # count number of detections in test fold
+        length(which(y$preds[y$preds$test_fold == FALSE, colnames(y$preds) %in% 
+                               gsub(" ", ".", sp_name)] > 0))}, 
+        error = function(x) NA)
+    } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
+  
+  # find number of detections and non-detections in each test fold
+  n_det_nondet <- data.frame(species = sp_name, model = mod_name,
+                             block_range = unlist(block_ranges), 
+                             n_det = unlist(ndets), 
+                             n_non_det = unlist(nnondets))
+  n_dets_df <- bind_rows(n_dets_df, n_det_nondet)
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
@@ -84,7 +106,7 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(aucs), 
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges) # end AUC --------------------------------------
+  rm(ev, block_ranges, n_det_nondet) # end AUC ---------------------------------
   
   # Cohen's Kappa --------------------------------------
   kappa_calc <- function(x, resp, pred) {
@@ -133,18 +155,18 @@ for(i in 1:length(sp_to_fit)) {
   rm(ev, block_ranges) # end Kappa ----------------------------------
   
   # sensitivity --------------------------------------------------
-  sens <- lapply(fits, FUN = function(x, sp_name) {
-    sens_iter <- lapply(x, FUN = function(y, sp_name) {
+  # use threshold that maximised Kappa for each model
+  sens <- mapply(FUN = function(x, thresh, sp_name) {
+    sens_iter <- mapply(FUN = function(y, thresh, sp_name) {
       tryCatch({
-        
-        
-        as.numeric(pROC::roc(
-          response = y$preds[y$preds$test_fold == T, 
-                             colnames(y$preds) == gsub(" ", ".", sp_name)], 
-          predictor = y$preds$pred[y$preds$test_fold == T])$auc)}, 
+        sensitivity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
         error = function(x) NA)
-    }, sp_name = sp_name)
-  }, sp_name = sp_to_fit[[i]])
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
   
   block_ranges <- lapply(fits, FUN = function(x) {
     range_iter <- lapply(x, FUN = function(y) {
@@ -155,11 +177,38 @@ for(i in 1:length(sp_to_fit)) {
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "sensitivity", 
-                   value = unlist(aucs), 
+                   value = unlist(sens), 
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end sensitivity --------------------------------------
   
+  # specificity --------------------------------------------------
+  # use threshold that maximised Kappa for each model
+  specif <- mapply(FUN = function(x, thresh, sp_name) {
+    specif_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        specificity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "raw", 
+                   test_data = "raw", cv = "block", metric = "specificity", 
+                   value = unlist(specif), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end specificity --------------------------------------
   
   
   ## test against spatially subsampled data
@@ -237,6 +286,62 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
+  
+  # sensitivity --------------------------------------------------
+  sens <- mapply(FUN = function(x, thresh, sp_name) {
+    sens_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        sensitivity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block", 
+                   metric = "sensitivity", 
+                   value = unlist(sens), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end sensitivity --------------------------------------
+  
+  # specificity --------------------------------------------------
+  specif <- mapply(FUN = function(x, thresh, sp_name) {
+    specif_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        specificity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block",
+                   metric = "specificity", 
+                   value = unlist(specif), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end specificity --------------------------------------
   rm(fits)
 }
 
@@ -263,6 +368,30 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  ndets <- lapply(fits, FUN = function(x, sp_name) {
+    det_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        # count number of detections in test fold
+        length(which(y$preds[y$preds$test_fold == TRUE, colnames(y$preds) %in% 
+                               gsub(" ", ".", sp_name)] > 0))}, 
+        error = function(x) NA)
+    } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
+  nnondets <- lapply(fits, FUN = function(x, sp_name) {
+    det_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        # count number of detections in test fold
+        length(which(y$preds[y$preds$test_fold == FALSE, colnames(y$preds) %in% 
+                               gsub(" ", ".", sp_name)] > 0))}, 
+        error = function(x) NA)
+    } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
+  
+  # find number of detections and non-detections in each test fold
+  n_det_nondet <- data.frame(species = sp_name, model = mod_name,
+                             block_range = unlist(block_ranges), 
+                             n_det = unlist(ndets), 
+                             n_non_det = unlist(nnondets))
+  n_dets_df <- bind_rows(n_dets_df, n_det_nondet)
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
@@ -270,7 +399,7 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(aucs), 
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges) # end AUC -----------------------------------------
+  rm(ev, block_ranges, n_det_nondet) # end AUC ---------------------------------
   
   # Kappa ----------------------------------------------
   # get Kappa for each fold
@@ -300,6 +429,62 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
+  
+  # sensitivity --------------------------------------------------
+  sens <- mapply(FUN = function(x, thresh, sp_name) {
+    sens_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        sensitivity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block", 
+                   metric = "sensitivity", 
+                   value = unlist(sens), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end sensitivity --------------------------------------
+  
+  # specificity --------------------------------------------------
+  specif <- mapply(FUN = function(x, thresh, sp_name) {
+    specif_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        specificity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block",
+                   metric = "specificity", 
+                   value = unlist(specif), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end specificity --------------------------------------
   
   ## test against spatially subsampled data
   aucs <- lapply(fits, FUN = function(x, sp_name, test_data) {
@@ -375,6 +560,62 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
+  
+  # sensitivity --------------------------------------------------
+  sens <- mapply(FUN = function(x, thresh, sp_name) {
+    sens_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        sensitivity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block", 
+                   metric = "sensitivity", 
+                   value = unlist(sens), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end sensitivity --------------------------------------
+  
+  # specificity --------------------------------------------------
+  specif <- mapply(FUN = function(x, thresh, sp_name) {
+    specif_iter <- mapply(FUN = function(y, thresh, sp_name) {
+      tryCatch({
+        specificity(threshold = thresh, 
+                    response = y$preds[y$preds$test_fold == T, 
+                                       colnames(y$preds) == gsub(" ", ".", 
+                                                                 sp_name)], 
+                    predictions = y$preds$pred[y$preds$test_fold == T])}, 
+        error = function(x) NA)
+    }, x, thresh, MoreArgs = list(sp_name = sp_name))
+  }, fits, kp, MoreArgs = list(sp_name = sp_to_fit[[i]]), SIMPLIFY = F)
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block",
+                   metric = "specificity", 
+                   value = unlist(specif), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges) # end specificity --------------------------------------
   rm(fits)
 }
 ### end evaluation ---------------------------------------------------

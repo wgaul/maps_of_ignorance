@@ -10,7 +10,7 @@
 ## 
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 24 Jan 2020
-## last modified: 25 May 2020
+## last modified: 26 May 2020
 ##############################
 library(blockCV)
 library(sf)
@@ -53,23 +53,29 @@ if(make_spatial_blocks) {
   # spatialAutoRange(pred_brick, sampleNumber = 1000, 
   #                  nCores = 3, showPlots = TRUE, plotVariograms = FALSE)
   
-  
   ## make spatial blocks for CV testing
   # Make multiple different CV splits
   fold_assignments <- list()
   for(i in 1:n_cv_trials) {
     for(j in 1:length(cv_block_sizes)) {
-      fold_assignments[[length(fold_assignments) + 1]] <- spatialBlock(
-        mill_spat, 
-        theRange = cv_block_sizes[j], 
-        k = n_folds, 
-        selection = "random", 
-        iteration = 5, 
-        showBlocks = TRUE, 
-        xOffset = runif(n = 1, min = 0, max = 1), 
-        yOffset = runif(n = 1, min = 0, max = 1),
-        rasterLayer = pred_brick$pasture_l2, 
-        biomod2Format = FALSE)
+      if(cv_block_sizes[j] != "random") {
+        fold_assignments[[length(fold_assignments) + 1]] <- spatialBlock(
+          mill_spat, 
+          theRange = as.numeric(as.character(cv_block_sizes[j])), 
+          k = n_folds, 
+          selection = "random", 
+          iteration = 5, 
+          showBlocks = TRUE, 
+          xOffset = runif(n = 1, min = 0, max = 1), 
+          yOffset = runif(n = 1, min = 0, max = 1),
+          rasterLayer = pred_brick$pasture_l2, 
+          biomod2Format = FALSE)
+      }
+      if(cv_block_sizes[j] == "random") {
+        fold_assignments[[length(fold_assignments) + 1]] <- list(
+          blocks = sample(1:5, size = nrow(mill_wide), replace = T),
+          range = "random")
+      }
     }
   }
   
@@ -84,7 +90,7 @@ if(make_spatial_blocks) {
   
   for(i in 1:n_subsamp_block_draws) {
     b_subsamp <- spatialBlock(checklists_spat, 
-                              theRange = 30000,
+                              theRange = block_range_spat_undersamp,
                               k = n_folds, 
                               selection = "random", 
                               iteration = 5, 

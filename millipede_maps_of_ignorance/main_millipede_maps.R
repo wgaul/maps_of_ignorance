@@ -25,8 +25,9 @@ make_sampling_plots <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 n_folds <- 5 # number of cross-validation folds to use
 n_cv_trials <- 3 # number of different cross-validation fold layouts to use
-cv_block_sizes <- c(20000, 100000) # sizes of CV spatial blocks (in meters)
+cv_block_sizes <- c("random", 30000, 100000) # sizes of CV spatial blocks (in meters)
 n_subsamp_block_draws <- 300 # number of spatial subsampling block configurations to make
+block_range_spat_undersamp <- 30000 # spatial undersampling grid block size (m)
 
 library(wgutil)
 library(Hmisc)
@@ -50,8 +51,7 @@ source("functions_maps_of_ignorance.R")
 
 n_cores <- 2
 
-sp_to_fit <- list("Tachypodoiulus niger",
-                  "Ommatoiulus sabulosus")
+sp_to_fit <- list("Ommatoiulus sabulosus")
 
 # sp_to_fit <- list("Julus scandinavius", "Tachypodoiulus niger",
 #                   "Ommatoiulus sabulosus", "Cylindroiulus punctatus", 
@@ -71,6 +71,10 @@ evals <- data.frame() # data frame to hold evaluation results
 # Specify the model(s) using the string that was used as the beginning of the 
 # file names that hold the fitted model objects.  e.g. here use "day_ll_rf" 
 # for the file day_ll_rf_noSubSamp_fits_Julus_scaninavius.rds
+
+# df to hold the number of detections and non-detections per CV test fold
+n_dets_df <- data.frame()
+
 mod_names <- c("day_ll_rf", "env_ll_rf", "spat_ll_rf")
 for(mod_name in mod_names) {
   source("evaluate_models.R")
