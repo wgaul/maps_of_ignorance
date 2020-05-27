@@ -22,8 +22,8 @@ set.seed(seed)
 fit_brt <- F
 fit_rf <- T
 make_sampling_plots <- F
-make_spatial_blocks <- F # takes a few minutes. Set to T for final run
-n_folds <- 5 # number of cross-validation folds to use
+make_spatial_blocks <- T # takes a few minutes. Set to T for final run
+n_folds <- 3 # number of cross-validation folds to use
 n_cv_trials <- 3 # number of different cross-validation fold layouts to use
 cv_block_sizes <- c("random", 30000, 100000) # sizes of CV spatial blocks (in meters)
 n_subsamp_block_draws <- 300 # number of spatial subsampling block configurations to make
@@ -73,7 +73,7 @@ evals <- data.frame() # data frame to hold evaluation results
 # for the file day_ll_rf_noSubSamp_fits_Julus_scaninavius.rds
 
 # df to hold the number of detections and non-detections per CV test fold
-n_dets_df <- data.frame()
+# n_dets_df <- data.frame()
 
 mod_names <- c("day_ll_rf", "env_ll_rf", "spat_ll_rf")
 for(mod_name in mod_names) {

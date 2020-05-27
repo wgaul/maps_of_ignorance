@@ -9,18 +9,25 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 26 May 2020
+## last modified: 27 May 2020
 ##############################
 t_size <- 12
 
 ## plot results using random CV -----------------------------------------------
 # how many detections and non-detections in test folds?
-n_dets_long <- pivot_longer(n_dets_df, cols = n_det:n_non_det, 
-                            names_to = "detection")
-ggplot(data = n_dets_long, aes(x = detection, y = value, color = block_range)) +
+ndet_df <- pivot_longer(evals[evals$test_data == "spat_subsamp", ], 
+                        n_dets_in_test:n_nondets_in_test, 
+                        names_to = "detection", values_to = "count")
+ggplot(data = ndet_df, 
+       aes (x = factor(as.character(block_cv_range)), y = count, 
+            color = detection)) + 
   geom_boxplot() + 
-  ggtitle("Number of detections and non-detections\nin individual CV folds\n(not this many will be used in testing if I spatially\nsubsample test data")
+  ylab("Number in test dataset") + 
+  ggtitle("When testing on spatially subsampled data") + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))
 
+
+# plot AUC for random CV
 ggplot(data = evals[evals$metric == "AUC" & 
                       as.character(evals$block_cv_range) == "random", ], 
        aes(x = factor(train_data, 
