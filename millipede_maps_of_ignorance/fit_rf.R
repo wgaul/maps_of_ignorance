@@ -139,7 +139,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # drop predictor variables from predictions dataframe 
   newdata <- select(newdata, hectad, eastings, northings, cells,
                     list_length, day_of_year, folds, test_fold, pred)
- 
+
   # return fitted model, and predictions for this model
   tryCatch(list(
     m = mod, preds = preds, standardized_preds = newdata, 

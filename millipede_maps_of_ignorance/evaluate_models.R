@@ -1,5 +1,5 @@
 #############################
-## Evaluate DOY + LL SDMs for millipedes
+## Evaluate SDMs for millipedes
 ## 
 ## This script is meant to be sourced from within 'main_millipede_maps.R'.
 ## 
@@ -8,7 +8,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 27 May 2020
+## last modified: 29 May 2020
 ##############################
 library(pROC)
 library(psych)
@@ -31,20 +31,31 @@ for(i in 1:length(test_points_ss)) {
     mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
       2:(ncol(block_subsamp_10k)-1), size = 1)]
 
+    # separate presence and absence checklists.  Keep all presence checklists.
+    presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
+                                             names(test_points_ss)[i]] > 0, ]
+    absences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
+                                            names(test_points_ss)[i]] == 0, ]
+    
     # spatially sub-sample absence checklists to 2 per cell
-    # for testing, spatially subsample ALL data, so take only 1 checklist from 
-    # each cell (i.e. do not undersample by keeping all detections and only 
-    # spatially subsampling non-detections)
-    # cell_abs_tab <- table(absences$spat_subsamp_cell)
-    keep_rows <- c()
-    for(ri in 1:length(unique(mill_wide_df$spat_subsamp_cell))) {
-      cell <- unique(mill_wide_df$spat_subsamp_cell)[ri]
-      keep_rows <- c(keep_rows, 
-                     sample(which(mill_wide_df$spat_subsamp_cell == cell), 
-                            size = 1))
+    # Ideally, testing would use data that is spatially subsampled without 
+    # separating detections and non-detections.  However, given the very small 
+    # number of detections we have, in order to get enough detections in the 
+    # test datasets I am opting to use the same "spatial undersampling" that 
+    # I used for model training - i.e. subsampling non-detections but keeping 
+    # all detections
+
+    keep_ab_rows <- c()
+    for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
+      cell <- unique(absences$spat_subsamp_cell)[ri]
+      keep_ab_rows <- c(keep_ab_rows, 
+                        sample(which(absences$spat_subsamp_cell == cell), 
+                               size = 2))
     }
-    # store this test datasets
-    test_points_ss[[i]][[j]] <- mill_wide_df[keep_rows, ]
+    absences <- absences[keep_ab_rows, ] 
+    # combine spatially sub-sampled non-detection data with all detection data
+    # and store this test dataset
+    test_points_ss[[i]][[j]] <- bind_rows(absences, presences)
   }
 }
 ## end get spatially subsampled test points ------------------------------------
@@ -74,30 +85,6 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
-  
-  # ndets <- lapply(fits, FUN = function(x, sp_name) {
-  #   det_iter <- lapply(x, FUN = function(y, sp_name) {
-  #     tryCatch({
-  #       # count number of detections in test fold
-  #       length(which(y$preds[y$preds$test_fold == TRUE, colnames(y$preds) %in% 
-  #                              gsub(" ", ".", sp_name)] > 0))}, 
-  #       error = function(x) NA)
-  #   } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
-  # nnondets <- lapply(fits, FUN = function(x, sp_name) {
-  #   det_iter <- lapply(x, FUN = function(y, sp_name) {
-  #     tryCatch({
-  #       # count number of detections in test fold
-  #       length(which(y$preds[y$preds$test_fold == FALSE, colnames(y$preds) %in% 
-  #                              gsub(" ", ".", sp_name)] > 0))}, 
-  #       error = function(x) NA)
-  #   } , sp_name = sp_name)}, sp_name = sp_to_fit[[i]])
-  # 
-  # # find number of detections and non-detections in each test fold
-  # n_det_nondet <- data.frame(species = sp_name, model = mod_name,
-  #                            block_range = unlist(block_ranges), 
-  #                            n_det = unlist(ndets), 
-  #                            n_non_det = unlist(nnondets))
-  # n_dets_df <- bind_rows(n_dets_df, n_det_nondet)
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -210,8 +197,38 @@ for(i in 1:length(sp_to_fit)) {
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
   
+  # Brier score --------------------------------------------------------------
+  brier <- lapply(fits, FUN = function(x, sp_name) {
+    br_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        pr <- y$preds$pred[y$preds$test_fold == T] # predicted values
+        # observed values
+        ob <- y$preds[y$preds$test_fold == T, 
+                      colnames(y$preds) == gsub(" ", ".", sp_name)]
+        # squared error
+        sq_er <- (pr - ob)^2
+        mean(sq_er) # return mean squared error (Brier score)
+      }, 
+      error = function(x) NA)
+    }, sp_name = sp_name)
+  }, sp_name = sp_to_fit[[i]])
   
-  ## test against spatially subsampled data
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "raw", 
+                   test_data = "raw", cv = "block", metric = "Brier", 
+                   value = unlist(brier), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  # end Brier score -----------------------------------------------------------
+  ## end test on raw data -----------------------------------------------------
+  
+  ## test against spatially subsampled data -----------------------------------
   aucs <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
     auc_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
       # select test dataset to use for this test
@@ -320,7 +337,7 @@ for(i in 1:length(sp_to_fit)) {
   # sensitivity --------------------------------------------------
   sens <- mapply(FUN = function(x, thresh, sp_name, test_points_ss) {
     sens_iter <- mapply(FUN = function(y, thresh, sp_name, test_points_ss) {
-      # select test dataset to use for this test
+      # select test dataset to use for this test 
       test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
@@ -328,14 +345,16 @@ for(i in 1:length(sp_to_fit)) {
       test_data <- test_data[test_data$hectad %in% y$test_sites |
                                test_data$hectad %in% 
                                y$preds$hectad[y$preds$test_fold == T], ]
-      test_data <- left_join(test_data, y$preds) # join predictions to test data
+      # join predictions to test data
+      test_data <- data.frame(left_join(test_data, y$preds))
       # drop checklists not in the test fold (sometimes checlists in hectads 
       # that are in "y$test_sites" or y$preds$test_fold == T are actually in 
       # different CV folds.
       test_data <- test_data[test_data$test_fold == T, ]
       tryCatch({
         sensitivity(threshold = thresh, 
-                    response = test_data[, colnames(test_data) == sp_name], 
+                    response = test_data[, colnames(test_data) == 
+                                           gsub(" ", ".", sp_name)], 
                     predictions = test_data$pred)}, 
         error = function(x) NA)
     }, x, thresh, MoreArgs = list(sp_name = sp_name, 
@@ -378,7 +397,8 @@ for(i in 1:length(sp_to_fit)) {
       test_data <- test_data[test_data$test_fold == T, ]
       tryCatch({
         specificity(threshold = thresh, 
-                    response = test_data[, colnames(test_data) == sp_name], 
+                    response = test_data[, colnames(test_data) == 
+                                           gsub(" ", ".", sp_name)], 
                     predictions = test_data$pred)}, 
         error = function(x) NA)
     }, x, thresh, MoreArgs = list(sp_name = sp_name, 
@@ -401,6 +421,49 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
+  
+  # Brier score --------------------------------------------------------------
+  brier <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
+    br_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
+      tryCatch({
+        # select test dataset to use for this test
+        test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+                                            size = 1)]]
+        # subset to spatially  subsampled test data points that are in the test 
+        # fold for this model
+        test_data <- test_data[test_data$hectad %in% y$test_sites |
+                                 test_data$hectad %in% 
+                                 y$preds$hectad[y$preds$test_fold == T], ]
+        test_data <- left_join(test_data, y$preds) # join predictions to test data
+        # drop checklists not in the test fold (sometimes checlists in hectads 
+        # that are in "y$test_sites" or y$preds$test_fold == T are in different 
+        # CV folds b/c cv block boundary is within the hectad and checklists are 
+        # at finer spatial resolution, or because CV used randomly chosen 
+        # checklists, regardless of what hectad the were in. 
+        test_data <- test_data[test_data$test_fold == T, ] 
+        pr <- test_data$pred # predicted values
+        # observed values
+        ob <- test_data[, colnames(test_data) == gsub(" ", ".", sp_name)]
+        sq_er <- (pr - ob)^2 # squared error
+        mean(sq_er) # return mean squared error (Brier score)
+      }, 
+      error = function(x) NA)
+    }, sp_name = sp_name, test_points_ss = test_points_ss)
+  }, sp_name = sp_to_fit[[i]], test_points_ss = test_points_ss[[i]])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "raw", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Brier", 
+                   value = unlist(brier), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  # end Brier score -----------------------------------------------------------
   ## end test with spatially subsampled data ----------------------------------
   rm(fits)
 }
@@ -411,7 +474,7 @@ for(i in 1:length(sp_to_fit)) {
                          gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
-  ## test against original data -----------------------------------------------
+  ## test against raw data -----------------------------------------------
   aucs <- lapply(fits, FUN = function(x, sp_name) {
     auc_iter <- lapply(x, FUN = function(y, sp_name) {
       tryCatch({
@@ -521,7 +584,38 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
-  ## end test against original data -------------------------------------------
+  
+  # Brier score --------------------------------------------------------------
+  brier <- lapply(fits, FUN = function(x, sp_name) {
+    br_iter <- lapply(x, FUN = function(y, sp_name) {
+      tryCatch({
+        pr <- y$preds$pred[y$preds$test_fold == T] # predicted values
+        # observed values
+        ob <- y$preds[y$preds$test_fold == T, 
+                      colnames(y$preds) == gsub(" ", ".", sp_name)]
+        # squared error
+        sq_er <- (pr - ob)^2
+        mean(sq_er) # return mean squared error (Brier score)
+      }, 
+      error = function(x) NA)
+    }, sp_name = sp_name)
+  }, sp_name = sp_to_fit[[i]])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "raw", cv = "block", metric = "Brier", 
+                   value = unlist(brier), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  rm(ev, block_ranges)
+  # end Brier score -----------------------------------------------------------
+  ## end test against raw data -------------------------------------------
   
   ## test against spatially subsampled data -----------------------------------
   aucs <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
@@ -647,7 +741,8 @@ for(i in 1:length(sp_to_fit)) {
       test_data <- test_data[test_data$test_fold == T, ]
       tryCatch({
         sensitivity(threshold = thresh, 
-                    response = test_data[, colnames(test_data) == sp_name], 
+                    response = test_data[, colnames(test_data) == 
+                                           gsub(" ", ".", sp_name)], 
                     predictions = test_data$pred)}, 
         error = function(x) NA)
     }, x, thresh, MoreArgs = list(sp_name = sp_name, 
@@ -689,7 +784,8 @@ for(i in 1:length(sp_to_fit)) {
       test_data <- test_data[test_data$test_fold == T, ]
       tryCatch({
         specificity(threshold = thresh, 
-                    response = test_data[, colnames(test_data) == sp_name], 
+                    response = test_data[, colnames(test_data) == 
+                                           gsub(" ", ".", sp_name)], 
                     predictions = test_data$pred)}, 
         error = function(x) NA)
     }, x, thresh, MoreArgs = list(sp_name = sp_name, 
@@ -712,6 +808,49 @@ for(i in 1:length(sp_to_fit)) {
                    block_cv_range = unlist(block_ranges))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
+  
+  # Brier score --------------------------------------------------------------
+  brier <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
+    br_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
+      tryCatch({
+        # select test dataset to use for this test
+        test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+                                            size = 1)]]
+        # subset to spatially  subsampled test data points that are in the test 
+        # fold for this model
+        test_data <- test_data[test_data$hectad %in% y$test_sites |
+                                 test_data$hectad %in% 
+                                 y$preds$hectad[y$preds$test_fold == T], ]
+        test_data <- left_join(test_data, y$preds) # join predictions to test data
+        # drop checklists not in the test fold (sometimes checlists in hectads 
+        # that are in "y$test_sites" or y$preds$test_fold == T are in different 
+        # CV folds b/c cv block boundary is within the hectad and checklists are 
+        # at finer spatial resolution, or because CV used randomly chosen 
+        # checklists, regardless of what hectad the were in. 
+        test_data <- test_data[test_data$test_fold == T, ] 
+        pr <- test_data$pred # predicted values
+        # observed values
+        ob <- test_data[, colnames(test_data) == gsub(" ", ".", sp_name)]
+        sq_er <- (pr - ob)^2 # squared error
+        mean(sq_er) # return mean squared error (Brier score)
+      }, 
+      error = function(x) NA)
+    }, sp_name = sp_name, test_points_ss = test_points_ss)
+  }, sp_name = sp_to_fit[[i]], test_points_ss = test_points_ss[[i]])
+  
+  block_ranges <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$block_cv_range}, error = function(x) NA)
+    })})
+  
+  # put evaluation metrics for every fold into df
+  ev <- data.frame(species = sp_name, model = mod_name, 
+                   train_data = "spat_subsamp", 
+                   test_data = "spat_subsamp", cv = "block", metric = "Brier", 
+                   value = unlist(brier), 
+                   block_cv_range = unlist(block_ranges))
+  evals <- bind_rows(evals, ev)
+  # end Brier score -----------------------------------------------------------
   ## end test on spatially subsampled data ------------------------------------
   rm(fits)
 }

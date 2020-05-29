@@ -73,7 +73,7 @@ if(make_spatial_blocks) {
       }
       if(cv_block_sizes[j] == "random") {
         fold_assignments[[length(fold_assignments) + 1]] <- list(
-          blocks = sample(1:5, size = nrow(mill_wide), replace = T),
+          blocks = sample(1:n_folds, size = nrow(mill_wide), replace = T),
           range = "random")
       }
     }

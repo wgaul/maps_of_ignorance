@@ -45,7 +45,7 @@ ggplot(data = evals[evals$metric == "AUC" &
     levels = c("raw", "spat_subsamp"), 
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
-  ylab("AUC\n(block Cross-Validated)") + 
+  ylab("AUC\n(Cross-Validated)") + 
   ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
@@ -69,7 +69,7 @@ ggplot(data = evals[evals$metric == "Kappa" &
     levels = c("raw", "spat_subsamp"), 
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
-  ylab("Kappa\n(block Cross-Validated)") + 
+  ylab("Kappa\n(Cross-Validated)") + 
   ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
@@ -94,7 +94,7 @@ ggplot(data = evals[evals$metric == "sensitivity" &
     levels = c("raw", "spat_subsamp"), 
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
-  ylab("Sensitivity\n(block Cross-Validated)") + 
+  ylab("Sensitivity\n(Cross-Validated)") + 
   ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
@@ -121,6 +121,31 @@ ggplot(data = evals[evals$metric == "specificity" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Specificity\n(block Cross-Validated)") + 
+  ggtitle("Random CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+# plot Brier score
+ggplot(data = evals[evals$metric == "Brier" & 
+                      as.character(evals$block_cv_range) == "random", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Brier score\n(Cross-Validated)") + 
   ggtitle("Random CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
@@ -223,6 +248,31 @@ ggplot(data = evals[evals$metric == "specificity" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Specificity\n(block Cross-Validated)") + 
+  ggtitle("100km block CV") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+
+# plot specificity
+ggplot(data = evals[evals$metric == "Brier" & 
+                      as.character(evals$block_cv_range) == "1e+05", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(model, 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                                     "\nEnvironment + DOY +\nList Length\n", 
+                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("Brier score\n(block Cross-Validated)") + 
   ggtitle("100km block CV") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
