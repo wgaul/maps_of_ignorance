@@ -9,22 +9,19 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 27 May 2020
+## last modified: 10 June 2020
 ##############################
 t_size <- 12
 
-## plot results using random CV -----------------------------------------------
-# how many detections and non-detections in test folds?
-ndet_df <- pivot_longer(evals[evals$test_data == "spat_subsamp", ], 
-                        n_dets_in_test:n_nondets_in_test, 
-                        names_to = "detection", values_to = "count")
-ggplot(data = ndet_df, 
-       aes (x = factor(as.character(block_cv_range)), y = count, 
-            color = detection)) + 
-  geom_boxplot() + 
-  ylab("Number in test dataset") + 
-  ggtitle("When testing on spatially subsampled data") + 
-  theme(axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1))
+# spatial evenness of training and test datasets
+ggplot(data = evals[!is.na(evals$simpson_training) &
+                      evals$train_data == "spat_subsamp", ], 
+       aes(x = factor(block_cv_range), y = simpson_training)) + 
+  geom_boxplot()
+
+mapply(FUN = function(x, nm) hist(x, main = nm, 
+                                  xlab = "Simpson Evenness - Test data"), 
+       evenness_test, names(evenness_test))
 
 
 # plot AUC for random CV

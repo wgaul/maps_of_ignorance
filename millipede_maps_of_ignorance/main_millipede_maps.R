@@ -49,7 +49,7 @@ library(randomForest)
 
 source("functions_maps_of_ignorance.R")
 
-n_cores <- 2
+n_cores <- 1
 
 sp_to_fit <- list("Ommatoiulus sabulosus")
 
@@ -82,6 +82,7 @@ for(mod_name in mod_names) {
 
 ## make plots
 source("plots_main.R")
+source("plots_supplementary.R")
 
 if(make_sampling_plots) source("sampling_coverage_maps.R")
 

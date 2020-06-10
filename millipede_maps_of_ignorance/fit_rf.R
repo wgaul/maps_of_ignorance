@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 26 May 2020
+## last modified: 10 June 2020
 ##############################
 
 on_sonic <- F
@@ -139,7 +139,24 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # drop predictor variables from predictions dataframe 
   newdata <- select(newdata, hectad, eastings, northings, cells,
                     list_length, day_of_year, folds, test_fold, pred)
-
+  
+  ## calculate class balance (proportion of checklists with a detection)
+  prop_dets <- tryCatch({
+    length(which(sp_df[sp_df$folds != test_fold, 
+                                  which(colnames(sp_df) == sp_name)] != 0)) / 
+    nrow(sp_df)}, error = function (x) NA)
+  
+  ## calculate Simpson's evenness for training and test datasets
+  # Only calculate this for fold # 1.  The same dataset is used in multiple 
+  # folds, so the value will be identical for all folds using that dataset.
+  if(test_fold == 1) {
+    table_nobs <- table(sp_df$hectad)
+    simps_train <- simpson_even(as.numeric(table_nobs))
+  } else {
+    simps_train <- NA
+  }
+  
+  
   # return fitted model, and predictions for this model
   tryCatch(list(
     m = mod, preds = preds, standardized_preds = newdata, 
@@ -147,7 +164,9 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
     test_sites = unique(newdata$hectad[newdata$folds == test_fold]), 
     block_cv_range = block_cv_range, 
     n_detections_test_fold = try(sum(sp_df[sp_df$folds == test_fold, 
-                                           sp_name]))), 
+                                           sp_name])),
+    simpson_training = simps_train, 
+    proportion_detections = prop_dets), 
     error = function(x) "No list exported from fit_rf.")
 }
 

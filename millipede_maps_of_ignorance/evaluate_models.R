@@ -8,7 +8,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 29 May 2020
+## last modified: 10 June 2020
 ##############################
 library(pROC)
 library(psych)
@@ -58,6 +58,13 @@ for(i in 1:length(test_points_ss)) {
     test_points_ss[[i]][[j]] <- bind_rows(absences, presences)
   }
 }
+
+# measure spatial evennes using Simpson's evenness for test datasets
+evenness_test <- lapply(test_points_ss, FUN = function(x) {
+  sapply(x, FUN = function(y) {
+    simpson_even(as.numeric(table(y$hectad)))
+  })
+})
 ## end get spatially subsampled test points ------------------------------------
 
 
@@ -86,14 +93,26 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  simps_trains <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training}, error = function(x) NA)
+    })})
+  
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "AUC", 
                    value = unlist(aucs), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   simpson_training = unlist(simps_trains), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges) # end AUC ---------------------------------
+  rm(ev, block_ranges, simps_trains) # end AUC ---------------------------------
   
   # Cohen's Kappa --------------------------------------
   kappa_calc <- function(x, resp, pred) {
@@ -132,12 +151,18 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
                    value = unlist(kp), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
   
@@ -159,13 +184,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "sensitivity", 
                    value = unlist(sens), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end sensitivity --------------------------------------
   
@@ -187,13 +217,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
-  
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "specificity", 
                    value = unlist(specif), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
   
@@ -217,13 +252,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "raw", cv = "block", metric = "Brier", 
                    value = unlist(brier), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   # end Brier score -----------------------------------------------------------
   ## end test on raw data -----------------------------------------------------
@@ -269,6 +309,16 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  simps_trains <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training}, error = function(x) NA)
+    })})
+  
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
@@ -276,6 +326,8 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
+                   simpson_training = unlist(simps_trains), 
+                   proportion_detections = unlist(prop_dets), 
                    n_dets_in_test = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {
                        if("1" %in% as.character(y$n_dets_nondets$Var1)) {
@@ -324,13 +376,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
                    value = unlist(kp), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
   
@@ -368,6 +425,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -375,7 +436,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", 
                    metric = "sensitivity", 
                    value = unlist(sens), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end sensitivity --------------------------------------
   
@@ -411,6 +473,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -418,7 +484,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block",
                    metric = "specificity", 
                    value = unlist(specif), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
   
@@ -455,13 +522,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
                    test_data = "spat_subsamp", cv = "block", metric = "Brier", 
                    value = unlist(brier), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   # end Brier score -----------------------------------------------------------
   ## end test with spatially subsampled data ----------------------------------
@@ -491,12 +563,18 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "AUC", 
                    value = unlist(aucs), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges, n_det_nondet) # end AUC ---------------------------------
   
@@ -519,13 +597,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "Kappa", 
                    value = unlist(kp), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
   
@@ -546,6 +629,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -553,7 +640,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "raw", cv = "block", 
                    metric = "sensitivity", 
                    value = unlist(sens), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end sensitivity --------------------------------------
   
@@ -574,6 +662,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -581,7 +673,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "raw", cv = "block",
                    metric = "specificity", 
                    value = unlist(specif), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
   
@@ -605,13 +698,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
                    test_data = "raw", cv = "block", metric = "Brier", 
                    value = unlist(brier), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges)
   # end Brier score -----------------------------------------------------------
@@ -658,6 +756,16 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
+  simps_trains <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training}, error = function(x) NA)
+    })})
+  
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
+  
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
@@ -665,6 +773,8 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
+                   simpson_training = unlist(simps_trains),
+                   proportion_detections = unlist(prop_dets), 
                    n_dets_in_test = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {
                        if("1" %in% as.character(y$n_dets_nondets$Var1)) {
@@ -713,13 +823,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
                    value = unlist(kp), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end Kappa ----------------------------------
   
@@ -755,6 +870,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -762,7 +881,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block", 
                    metric = "sensitivity", 
                    value = unlist(sens), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end sensitivity --------------------------------------
   
@@ -798,6 +918,10 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
@@ -805,7 +929,8 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "spat_subsamp", cv = "block",
                    metric = "specificity", 
                    value = unlist(specif), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   rm(ev, block_ranges) # end specificity --------------------------------------
   
@@ -842,13 +967,18 @@ for(i in 1:length(sp_to_fit)) {
     range_iter <- lapply(x, FUN = function(y) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
+  prop_dets <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$proportion_detections}, error = function(x) NA)
+    })})
   
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
                    test_data = "spat_subsamp", cv = "block", metric = "Brier", 
                    value = unlist(brier), 
-                   block_cv_range = unlist(block_ranges))
+                   block_cv_range = unlist(block_ranges), 
+                   proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
   # end Brier score -----------------------------------------------------------
   ## end test on spatially subsampled data ------------------------------------
