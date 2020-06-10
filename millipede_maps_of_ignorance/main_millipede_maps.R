@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 29 May 2020
+## last modified: 10 June 2020
 #################################
 warning("TODO: 21 May 2020: Re-set the number of spatial undersamplingn block configurations to make to a higher number (e.g. 2000 or something much more than the number of models to test and fit).")
 
@@ -62,6 +62,7 @@ names(sp_to_fit) <- sp_to_fit
 
 source("prepare_data.R")
 source("prepare_objects_for_SDM.R")
+mod_names <- c("day_ll_rf", "env_ll_rf", "spat_ll_rf", "env_spat_ll_rf")
 
 if(run_rf) source("fit_rf.R")
 if(run_brt) source("fit_brt.R")
@@ -75,7 +76,6 @@ evals <- data.frame() # data frame to hold evaluation results
 # df to hold the number of detections and non-detections per CV test fold
 # n_dets_df <- data.frame()
 
-mod_names <- c("day_ll_rf", "env_ll_rf", "spat_ll_rf")
 for(mod_name in mod_names) {
   source("evaluate_models.R")
 }

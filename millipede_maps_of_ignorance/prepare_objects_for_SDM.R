@@ -123,9 +123,9 @@ newdata_temp <- cbind(hec_names,
                                                  method = "simple", 
                                                  cellnumbers = TRUE)))
 newdata <- data.frame()
-for(i in 1:182) {
+for(i in 1:36) { # get predictions for every 10 days throught year
   dt <- newdata_temp
-  dt$day_of_year <- i*2
+  dt$day_of_year <- i*10
   newdata <- bind_rows(newdata, dt)
 }
 newdata$list_length <- 4

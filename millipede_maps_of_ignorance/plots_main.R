@@ -31,11 +31,14 @@ ggplot(data = evals[evals$metric == "AUC" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
-                                     "\nEnvironment +\nDOY +\nList Length\n", 
-                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nEnvironment +\nDOY +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -56,10 +59,12 @@ ggplot(data = evals[evals$metric == "Kappa" &
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
            color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
+                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                                     "env_spat_ll_rf"), 
                           labels = c("\nDay of Year (DOY) +\nList Length\n", 
                                      "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+                                     "\nLat + Lon + DOY +\nList Length\n", 
+                                     "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -80,11 +85,14 @@ ggplot(data = evals[evals$metric == "sensitivity" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -106,11 +114,14 @@ ggplot(data = evals[evals$metric == "specificity" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf",
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -131,11 +142,14 @@ ggplot(data = evals[evals$metric == "Brier" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -158,11 +172,14 @@ ggplot(data = evals[evals$metric == "AUC" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
-                                     "\nEnvironment +\nDOY +\nList Length\n", 
-                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nEnvironment +\nDOY +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -182,11 +199,14 @@ ggplot(data = evals[evals$metric == "Kappa" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -207,11 +227,14 @@ ggplot(data = evals[evals$metric == "sensitivity" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -233,11 +256,14 @@ ggplot(data = evals[evals$metric == "specificity" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -258,11 +284,14 @@ ggplot(data = evals[evals$metric == "Brier" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -298,11 +327,14 @@ ggplot(data = evals[evals$metric == "Brier" &
 ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ], 
        aes(x = factor(block_cv_range), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf"), 
-                          labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
-                                     "\nEnvironment +\nDOY +\nList Length\n", 
-                                     "\nLat + Lon +\nDOY +\nList Length\n")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nEnvironment +\nDOY +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(train_data, 
                                levels = c("raw", "spat_subsamp"), 

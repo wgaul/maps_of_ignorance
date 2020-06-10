@@ -444,45 +444,165 @@ for(i in 1:length(sp_to_fit)) {
   rm(env_rf_fits, mill_predictions)
 }
 ### end environmental + LL + DOY model ------------------------------------
+
+### fit environmental + lat + long + LL + DOY model ----------------------------
+# train with raw data
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  env_rf_fits <- mclapply(fold_assignments, 
+                          sp_name = sp_name, 
+                          FUN = call_fit_rf, 
+                          sp_df = mill_wide, 
+                          pred_names = c("mean_tn", "mean_tx", 
+                                         "mean_rr", "artificial_surfaces", 
+                                         "forest_seminatural_l1", 
+                                         "wetlands_l1", "pasture_l2", 
+                                         "arable_l2", "elev", 
+                                         "eastings", "northings", 
+                                         "day_of_year", "list_length"),
+                          block_subsamp = block_subsamp_10k, 
+                          spatial.under.sample = FALSE, 
+                          mtry = 4, 
+                          mc.cores = n_cores)
+  try(print(pryr::object_size(env_rf_fits)))
+  try(saveRDS(env_rf_fits, paste0("env_spat_ll_rf_noSubSamp_fits_", 
+                                  gsub(" ", "_", sp_name),
+                                  ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    env_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(lapply(mill_predictions, 
+                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, 
+              paste0("mill_predictions_env_spat_ll_rf_noSubSamp_", 
+                     gsub(" ", "_", sp_name),
+                     ".rds")))
+  rm(env_rf_fits, mill_predictions)
+}
+
+# train with spatially subsampled data
+for(i in 1:length(sp_to_fit)) {
+  sp_name <- names(sp_to_fit)[i]
+  env_rf_fits <- mclapply(fold_assignments, 
+                          sp_name = sp_name, 
+                          FUN = call_fit_rf, 
+                          sp_df = mill_wide, 
+                          pred_names = c("mean_tn", "mean_tx", 
+                                         "mean_rr", "artificial_surfaces", 
+                                         "forest_seminatural_l1", 
+                                         "wetlands_l1", "pasture_l2", 
+                                         "arable_l2", "elev", 
+                                         "eastings", "northings", 
+                                         "day_of_year", "list_length"),
+                          block_subsamp = block_subsamp_10k, 
+                          spatial.under.sample = TRUE, 
+                          mtry = 4, 
+                          mc.cores = n_cores)
+  try(print(pryr::object_size(env_rf_fits)))
+  try(saveRDS(env_rf_fits, paste0("env_spat_ll_rf_SubSamp_fits_", 
+                                  gsub(" ", "_", sp_name),
+                                  ".rds")))
+  
+  # retrieve predictions with standardized sampling effort
+  mill_predictions <- lapply(
+    env_rf_fits, 
+    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
+      tryCatch(x$standardized_preds, error = function(x) NA)})
+    })
+  mill_predictions <- bind_rows(
+    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+  
+  try(saveRDS(mill_predictions, 
+              paste0("mill_predictions_env_spat_ll_rf_SubSamp_", 
+                     gsub(" ", "_", sp_name), ".rds")))
+  rm(env_rf_fits, mill_predictions)
+}
+### end environmental + LL + DOY model ------------------------------------
 ### end fit random forest ----------------------------------------------------
 
 
+for(mod_name in mod_names) {
+  for(i in 1:length(sp_to_fit)) {
+    ### trained with raw data
+    fits <- readRDS(paste0(mod_name, "_noSubSamp_fits_", 
+                           gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+    sp_name <- names(sp_to_fit)[i]
+    
+    # Get predictions with standardized survey effort
+    mill_predictions <- lapply(fits, FUN = function(x) {
+      lapply(x[sapply(x, is.list)], FUN = function(x) {
+        preds <- tryCatch(x$standardized_preds, error = function(x) NA)
+        preds$cv <- as.character(x$block_cv_range)
+        return(preds)})})
+    mill_predictions <- bind_rows(lapply(
+      mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+    # save results
+    try(saveRDS(mill_predictions, 
+                paste0("standard_predictions_", mod_name, "_noSubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    
+    # get variable importance (averaged over 5 folds) 
+    var_imp <- lapply(fits, FUN = function(x) {
+      bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
+        df <- data.frame(y$m$importance)
+        df$variable <- rownames(df)
+        df[, c("variable", "MeanDecreaseGini")]
+        df$species <- sp_name
+        df$model <- mod_name
+        df$train_dat <- "raw"
+        df$cv <- as.character(y$block_cv_range)
+        return(df)}))}
+    )
+    var_imp <- bind_rows(var_imp)
+    # save results
+    try(saveRDS(var_imp, 
+                paste0("var_importance_", mod_name, "_noSubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    rm(fits)
+    
+    ### trained with spatial subsampling
+    fits <- readRDS(paste0(mod_name, "_SubSamp_fits_", 
+                           gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+    
+    # Get predictions with standardized survey effort
+    mill_predictions <- lapply(fits, FUN = function(x) {
+      lapply(x[sapply(x, is.list)], FUN = function(x) {
+        preds <- tryCatch(x$standardized_preds, error = function(x) NA)
+        preds$cv <- as.character(x$block_cv_range)
+        return(preds)})})
+    mill_predictions <- bind_rows(lapply(
+      mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+    # save results
+    try(saveRDS(mill_predictions, 
+                paste0("standard_predictions_", mod_name, "_SubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    
+    # get variable importance (averaged over 5 folds) 
+    var_imp <- lapply(fits, FUN = function(x) {
+      bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
+        df <- data.frame(y$m$importance)
+        df$variable <- rownames(df)
+        df[, c("variable", "MeanDecreaseGini")]
+        df$species <- sp_name
+        df$model <- mod_name
+        df$train_dat <- "spat_subsamp"
+        df$cv <- as.character(y$block_cv_range)
+        return(df)}))}
+    )
+    var_imp <- bind_rows(var_imp)
+    # save results
+    try(saveRDS(var_imp, 
+                paste0("var_importance_", mod_name, "_SubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    rm(fits)
+  }
+}
 
-
-
-# Get predictions with standardized survey effort
-
-
-mill_predictions_env_rf <- lapply(
-  env_rf_fits, 
-  FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-    tryCatch(x$predictions, error = function(x) NA)})})
-mill_predictions_env_rf <- lapply(
-  mill_predictions_env_rf, 
-  FUN = function(x) {
-    bind_rows(x[!is.na(x)])})
-
-# get variable importance (averaged over 5 folds) 
-mill_var_imp_spatial_rf <- lapply(
-  spatial_rf_fits, 
-  FUN = function(x) {
-    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
-      df <- data.frame(y$m$importance)
-      df$variable <- rownames(df)
-      df[, c("variable", "MeanDecreaseGini")]}))}
-)
-mill_var_imp_env_rf <- lapply(
-  env_rf_fits, 
-  FUN = function(x) {
-    bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
-      df <- data.frame(y$m$importance)
-      df$variable <- rownames(df)
-      df[, c("variable", "MeanDecreaseGini")]}))}
-)
-
-# save results
-
-try(saveRDS(mill_predictions_env_rf, "mill_predictions_env_ll_rf.rds"))
 
 
 
