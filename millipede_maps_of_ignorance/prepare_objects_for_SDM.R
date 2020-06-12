@@ -128,6 +128,8 @@ for(i in 1:36) { # get predictions for every 10 days throught year
   dt$day_of_year <- i*10
   newdata <- bind_rows(newdata, dt)
 }
+newdata$sin_doy <- sin((2*pi*newdata$day_of_year) / 365)
+newdata$cos_doy <- cos((2*pi*newdata$day_of_year) / 365)
 newdata$list_length <- 4
 
 newdata <- SpatialPointsDataFrame(

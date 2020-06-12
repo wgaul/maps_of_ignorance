@@ -24,7 +24,7 @@ run_rf <- T
 make_sampling_plots <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 n_folds <- 3 # number of cross-validation folds to use
-n_cv_trials <- 5 # number of different cross-validation fold layouts to use
+n_cv_trials <- 3 # number of different cross-validation fold layouts to use
 cv_block_sizes <- c("random", 100000) # sizes of CV spatial blocks (in meters)
 n_subsamp_block_draws <- 400 # number of spatial subsampling block configurations to make
 block_range_spat_undersamp <- 30000 # spatial undersampling grid block size (m)

@@ -100,7 +100,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
       mtry = mtry,   # use mtry_best if I want to fit model with optimum mtry 
       nodesize = 1, 
       replace = TRUE, classwt = NULL, 
-      importance = FALSE, 
+      importance = TRUE, 
       keep.forest = TRUE)}, error = function(x) NA)
 
   # make predictions for model testing (predict to ALL folds, and predict to 
@@ -138,7 +138,8 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   
   # drop predictor variables from predictions dataframe 
   newdata <- select(newdata, hectad, eastings, northings, cells,
-                    list_length, day_of_year, folds, test_fold, pred)
+                    list_length, day_of_year, cos_doy, sin_doy, 
+                    folds, test_fold, pred)
   
   ## calculate class balance (proportion of checklists with a detection)
   prop_dets <- tryCatch({
@@ -267,7 +268,8 @@ for(i in 1:length(sp_to_fit)) {
                              sp_name = sp_name, 
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
-                             pred_names = c("day_of_year", "list_length"),
+                             pred_names = c("sin_doy", "cos_doy", 
+                                            "list_length"), #"day_of_year"
                              block_subsamp = block_subsamp_10k, 
                              spatial.under.sample = FALSE, 
                              mtry = 1, 
@@ -286,7 +288,8 @@ for(i in 1:length(sp_to_fit)) {
                              sp_name = sp_name, 
                              FUN = call_fit_rf, 
                              sp_df = mill_wide, 
-                             pred_names = c("day_of_year", "list_length"),
+                             pred_names = c("sin_doy", "cos_doy", 
+                                            "list_length"), #"day_of_year",
                              block_subsamp = block_subsamp_10k, 
                              spatial.under.sample = TRUE, 
                              mtry = 1,
@@ -308,7 +311,7 @@ for(i in 1:length(sp_to_fit)) {
                            FUN = call_fit_rf, 
                            sp_df = mill_wide, 
                            pred_names = c("eastings", "northings", 
-                                          "day_of_year", "list_length"),
+                                          "sin_doy", "cos_doy", "list_length"),
                            block_subsamp = block_subsamp_10k, 
                            spatial.under.sample = FALSE, 
                            mtry = 2, 
@@ -341,7 +344,7 @@ for(i in 1:length(sp_to_fit)) {
                            FUN = call_fit_rf, 
                            sp_df = mill_wide, 
                            pred_names = c("eastings", "northings", 
-                                          "day_of_year", "list_length"),
+                                          "sin_doy", "cos_doy", "list_length"),
                            block_subsamp = block_subsamp_10k, 
                            spatial.under.sample = TRUE, 
                            mtry = 2, 
@@ -382,7 +385,7 @@ for(i in 1:length(sp_to_fit)) {
                                          "forest_seminatural_l1", 
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
-                                         "day_of_year", "list_length"),
+                                         "sin_doy", "cos_doy", "list_length"),
                           block_subsamp = block_subsamp_10k, 
                           spatial.under.sample = FALSE, 
                           mtry = 3, 
@@ -419,7 +422,7 @@ for(i in 1:length(sp_to_fit)) {
                                          "forest_seminatural_l1", 
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
-                                         "day_of_year", "list_length"),
+                                         "sin_doy", "cos_doy", "list_length"),
                           block_subsamp = block_subsamp_10k, 
                           spatial.under.sample = TRUE, 
                           mtry = 3, 
@@ -459,7 +462,7 @@ for(i in 1:length(sp_to_fit)) {
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
                                          "eastings", "northings", 
-                                         "day_of_year", "list_length"),
+                                         "sin_doy", "cos_doy", "list_length"),
                           block_subsamp = block_subsamp_10k, 
                           spatial.under.sample = FALSE, 
                           mtry = 4, 
@@ -498,7 +501,7 @@ for(i in 1:length(sp_to_fit)) {
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
                                          "eastings", "northings", 
-                                         "day_of_year", "list_length"),
+                                         "sin_doy", "cos_doy", "list_length"),
                           block_subsamp = block_subsamp_10k, 
                           spatial.under.sample = TRUE, 
                           mtry = 4, 
@@ -533,7 +536,7 @@ for(mod_name in mod_names) {
                            gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
     sp_name <- names(sp_to_fit)[i]
     
-    # Get predictions with standardized survey effort
+    ## Get predictions with standardized survey effort
     mill_predictions <- lapply(fits, FUN = function(x) {
       lapply(x[sapply(x, is.list)], FUN = function(x) {
         preds <- tryCatch(x$standardized_preds, error = function(x) NA)
@@ -546,7 +549,7 @@ for(mod_name in mod_names) {
                 paste0("standard_predictions_", mod_name, "_noSubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     
-    # get variable importance (averaged over 5 folds) 
+    ## get variable importance (averaged over 3 folds) 
     var_imp <- lapply(fits, FUN = function(x) {
       bind_rows(lapply(x[sapply(x, is.list)], FUN = function(y) {
         df <- data.frame(y$m$importance)
@@ -563,9 +566,44 @@ for(mod_name in mod_names) {
     try(saveRDS(var_imp, 
                 paste0("var_importance_", mod_name, "_noSubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    
+    ## get partial dependence
+    # have to do this in for loops because when using lapply it seems R can't
+    # interpret a variable holding the name of the variable to get plot for
+    # in the partialPlot call.
+    pd_list <- list()
+    # loop through versions of this model for this species
+    for(fi in 1:length(fits)) { 
+      fits_pd <- list()
+      for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
+        mod <- fits[[fi]][[xi]]$m
+        vars <- as.character(rownames(importance(mod))) # get variable names
+        # get partial dependence for each variable
+        pl <- list()
+        for(vb in 1:length(vars)) {
+          pd <- data.frame(partialPlot(mod, 
+                                       pred.data = data.frame(mill_wide), 
+                                       x.var = vars[vb], plot = FALSE))
+          pd$variable <- vars[vb]
+          pd$species <- sp_name
+          pd$model <- mod_name
+          pd$train_data <- "raw"
+          pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
+          pl[[vb]] <- pd
+        }
+        pl <- bind_rows(pl)
+        fits_pd[[xi]] <- pl
+      }
+      pd_list[[fi]] <- bind_rows(fits_pd)
+    }
+    pd_list <- bind_rows(pd_list)
+    # save results
+    try(saveRDS(pd_list, 
+                paste0("partial_dependence_", mod_name, "_noSubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     rm(fits)
     
-    ### trained with spatial subsampling
+    ######### trained with spatial subsampling #############################
     fits <- readRDS(paste0(mod_name, "_SubSamp_fits_", 
                            gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
     
@@ -598,6 +636,41 @@ for(mod_name in mod_names) {
     # save results
     try(saveRDS(var_imp, 
                 paste0("var_importance_", mod_name, "_SubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    
+    ## get partial dependence
+    # have to do this in for loops because when using lapply it seems R can't
+    # interpret a variable holding the name of the variable to get plot for
+    # in the partialPlot call.
+    pd_list <- list()
+    # loop through versions of this model for this species
+    for(fi in 1:length(fits)) { 
+      fits_pd <- list()
+      for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
+        mod <- fits[[fi]][[xi]]$m
+        vars <- as.character(rownames(importance(mod))) # get variable names
+        # get partial dependence for each variable
+        pl <- list()
+        for(vb in 1:length(vars)) {
+          pd <- data.frame(partialPlot(mod, 
+                                       pred.data = data.frame(mill_wide), 
+                                       x.var = vars[vb], plot = FALSE))
+          pd$variable <- vars[vb]
+          pd$species <- sp_name
+          pd$model <- mod_name
+          pd$train_data <- "raw"
+          pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
+          pl[[vb]] <- pd
+        }
+        pl <- bind_rows(pl)
+        fits_pd[[xi]] <- pl
+      }
+      pd_list[[fi]] <- bind_rows(fits_pd)
+    }
+    pd_list <- bind_rows(pd_list)
+    # save results
+    try(saveRDS(pd_list, 
+                paste0("partial_dependence_", mod_name, "_SubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     rm(fits)
   }

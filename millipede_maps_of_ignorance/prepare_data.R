@@ -130,6 +130,8 @@ for(i in 1:length(unique(mill$checklist_ID))) {
 ## make Julian day and year variables
 mill$year <- year(mill$StartDate)
 mill$day_of_year <- yday(mill$StartDate)
+mill$sin_doy <- sin((2*pi*mill$day_of_year) / 365)
+mill$cos_doy <- cos((2*pi*mill$day_of_year) / 365)
 mill$temp_resolution <- mill$EndDate - mill$StartDate
 
 # join predictor variables to millipede data

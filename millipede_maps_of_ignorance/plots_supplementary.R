@@ -64,3 +64,37 @@ ggplot(data = evals[!is.na(evals$proportion_detections) &
   geom_point() + geom_smooth() + 
   ggtitle("Specificity") + 
   facet_wrap(~factor(species))
+
+
+## look at effect of block CV range size
+ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ], 
+       aes(x = factor(block_cv_range), 
+           y = value, 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nEnvironment +\nDOY +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(train_data, 
+                               levels = c("raw", "spat_subsamp"), 
+                               labels = c("raw", "spatially\nundersampled"))) + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8)
+
+# graph variable importance by CV strategy
+# CV strategy does not change variable importance conlcusions
+vimp_plots <- lapply(vimp, FUN = function(x) {
+  ggplot(data = x, 
+         aes(x = variable, y = MeanDecreaseGini)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() + 
+    ggtitle(paste0(x$species[1], "\n", x$model[1], ", trained with: ", 
+                   x$train_dat[1], "\n")) + 
+    facet_wrap(~cv)
+})
+
+for(i in 1:length(vimp_plots)) print(vimp_plots[i])
