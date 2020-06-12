@@ -8,7 +8,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 10 June 2020
+## last modified: 12 June 2020
 ##############################
 library(pROC)
 library(psych)
@@ -71,7 +71,7 @@ evenness_test <- lapply(test_points_ss, FUN = function(x) {
 ## evaluate models ------------------------------------------------------------
 # trained with raw data
 for(i in 1:length(sp_to_fit)) {
-  fits <- readRDS(paste0(mod_name, "_noSubSamp_fits_", 
+  fits <- readRDS(paste0("./saved_objects/", mod_name, "_noSubSamp_fits_", 
                          gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
@@ -93,9 +93,13 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
-  simps_trains <- lapply(fits, FUN = function(x) {
+  simps_trains_hec <- lapply(fits, FUN = function(x) {
     range_iter <- lapply(x, FUN = function(y) {
-      tryCatch({y$simpson_training}, error = function(x) NA)
+      tryCatch({y$simpson_training_hectad}, error = function(x) NA)
+    })})
+  simps_trains_blk <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training_subsampBlock}, error = function(x) NA)
     })})
   
   prop_dets <- lapply(fits, FUN = function(x) {
@@ -109,10 +113,11 @@ for(i in 1:length(sp_to_fit)) {
                    test_data = "raw", cv = "block", metric = "AUC", 
                    value = unlist(aucs), 
                    block_cv_range = unlist(block_ranges), 
-                   simpson_training = unlist(simps_trains), 
+                   simpson_training_hectad = unlist(simps_trains_hec), 
+                   simpson_training_subsampBlock = unlist(simps_trains_blk), 
                    proportion_detections = unlist(prop_dets))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges, simps_trains) # end AUC ---------------------------------
+  rm(ev, block_ranges, simps_trains_hec, simps_trains_blk) # end AUC ----------
   
   # Cohen's Kappa --------------------------------------
   kappa_calc <- function(x, resp, pred) {
@@ -309,9 +314,13 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
-  simps_trains <- lapply(fits, FUN = function(x) {
+  simps_trains_hec <- lapply(fits, FUN = function(x) {
     range_iter <- lapply(x, FUN = function(y) {
-      tryCatch({y$simpson_training}, error = function(x) NA)
+      tryCatch({y$simpson_training_hectad}, error = function(x) NA)
+    })})
+  simps_trains_blk <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training_subsampBlock}, error = function(x) NA)
     })})
   
   prop_dets <- lapply(fits, FUN = function(x) {
@@ -326,7 +335,8 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
-                   simpson_training = unlist(simps_trains), 
+                   simpson_training_hectad = unlist(simps_trains_hec), 
+                   simpson_training_subsampBlock = unlist(simps_trains_blk), 
                    proportion_detections = unlist(prop_dets), 
                    n_dets_in_test = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {
@@ -342,7 +352,7 @@ for(i in 1:length(sp_to_fit)) {
                        } else 0})
                      })))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges) # end AUC ----------------------------------------
+  rm(ev, block_ranges, simps_trains_hec, simps_trains_blk) # end AUC -----------
   
   # Kappa ------------------------------------
   # get kappa for each fold
@@ -542,7 +552,7 @@ for(i in 1:length(sp_to_fit)) {
 
 # trained with spatial subsampling
 for(i in 1:length(sp_to_fit)) {
-  fits <- readRDS(paste0(mod_name, "_SubSamp_fits_", 
+  fits <- readRDS(paste0("./saved_objects/", mod_name, "_SubSamp_fits_", 
                          gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
@@ -756,9 +766,13 @@ for(i in 1:length(sp_to_fit)) {
       tryCatch({y$block_cv_range}, error = function(x) NA)
     })})
   
-  simps_trains <- lapply(fits, FUN = function(x) {
+  simps_trains_hec <- lapply(fits, FUN = function(x) {
     range_iter <- lapply(x, FUN = function(y) {
-      tryCatch({y$simpson_training}, error = function(x) NA)
+      tryCatch({y$simpson_training_hectad}, error = function(x) NA)
+    })})
+  simps_trains_blk <- lapply(fits, FUN = function(x) {
+    range_iter <- lapply(x, FUN = function(y) {
+      tryCatch({y$simpson_training_subsampBlock}, error = function(x) NA)
     })})
   
   prop_dets <- lapply(fits, FUN = function(x) {
@@ -773,7 +787,8 @@ for(i in 1:length(sp_to_fit)) {
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
-                   simpson_training = unlist(simps_trains),
+                   simpson_training_hectad = unlist(simps_trains_hec), 
+                   simpson_training_subsampBlock = unlist(simps_trains_blk), 
                    proportion_detections = unlist(prop_dets), 
                    n_dets_in_test = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {
@@ -789,7 +804,7 @@ for(i in 1:length(sp_to_fit)) {
                        } else 0})
                    })))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges) 
+  rm(ev, block_ranges, simps_trains_hec, simps_trains_blk) 
   
   # Kappa ------------------------------------
   # get kappa for each fold

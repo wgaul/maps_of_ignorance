@@ -163,9 +163,9 @@ mill$year_csc <- mill$year_csc/sd(mill$year_csc)
 mill$doy_csc <- mill$day_of_year - 182.5 # center day of year
 mill$doy_csc <- mill$doy_csc/sd(mill$doy_csc)
 
-# I think 10 km in space is about as big as a year and as big as about 8 julian
-# days when all variables are scaled:
-max(mill$year) - min(mill$year)
-(max(mill$northings) - min(mill$northings))/10000
-365/43
+# # I think 10 km in space is about as big as a year and as big as about 8 julian
+# # days when all variables are scaled:
+# max(mill$year) - min(mill$year)
+# (max(mill$northings) - min(mill$northings))/10000
+# 365/43
 

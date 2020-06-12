@@ -10,10 +10,12 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 10 June 2020
+## last modified: 12 June 2020
 ##############################
 
 on_sonic <- F
+
+if(!dir.exists("./saved_objects")) dir.create("./saved_objects")
 
 # load objects that are needed to fit SDMs
 mill_wide <- readRDS("mill_wide.rds")
@@ -23,7 +25,8 @@ block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
 
 ### fit random forest ---------------------------------------------------------
 fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata, 
-                   sp_df_original, mtry, block_cv_range) {
+                   sp_df_original, mtry, block_cv_range, pred_brick, 
+                   block_range_spat_undersamp) {
   # ARGS: test_fold - integer giving the CV fold to be used as test data
   #       sp_name - character string giving the name of the column with 
   #                 detection/non-detection data to use
@@ -151,10 +154,56 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # Only calculate this for fold # 1.  The same dataset is used in multiple 
   # folds, so the value will be identical for all folds using that dataset.
   if(test_fold == 1) {
-    table_nobs <- table(sp_df$hectad)
-    simps_train <- simpson_even(as.numeric(table_nobs))
+    # calculate at hectad scale
+    # calculate number of checklists per hectad
+    table_nobs <- data.frame(table(sp_df$hectad))
+    colnames(table_nobs) <- c("hectad", "nrec")
+    # get all hectads (use newdata df to get names of all hectads)
+    all_hectads <- newdata[newdata$day_of_year == newdata$day_of_year[1], ]
+    all_hectads <- left_join(all_hectads, table_nobs, by = "hectad")
+    all_hectads$nrec[is.na(all_hectads$nrec)] <- 0
+    simps_train_hec <- simpson_even(as.numeric(all_hectads$nrec))
+    browser()   
+    ## calculate at spatial subsampling block scale (e.g. 30k X 30km)
+    lst_spat <- SpatialPointsDataFrame(
+      coords = sp_df[, c("eastings", "northings")], 
+      data = sp_df, proj4string = CRS("+init=epsg:29903"))
+    lst_spat <- lst_spat[ , "checklist_ID"] # make df of checklists
+    blks <- spatialBlock(lst_spat, 
+                         theRange = block_range_spat_undersamp,
+                         k = n_folds, selection = "random", iteration = 5, 
+                         xOffset = runif(n = 1, min = 0, max = 1), 
+                         yOffset = runif(n = 1, min = 0, max = 1),
+                         showBlocks = FALSE, 
+                         rasterLayer = pred_brick$pasture_l2, 
+                         biomod2Format = FALSE)
+    # add spatial subsampling grid cell ID to each hectad
+    all_hectads <- newdata[newdata$day_of_year == newdata$day_of_year[1], ]
+    all_hectads <- SpatialPointsDataFrame(
+      coords = all_hectads[, c("eastings", "northings")], 
+      data = all_hectads, proj4string = CRS("+init=epsg:29903"))
+    all_hectads <- st_join(st_as_sf(all_hectads), 
+                           st_as_sf(blks$blocks[, names(
+                             blks$blocks) == "layer"]))
+    all_hectads <- data.frame(all_hectads)
+    colnames(all_hectads)[which(
+      colnames(all_hectads) == "layer")] <- "subsamp_blocks"
+    # remove geometry column
+    all_hectads <- all_hectads[, -which(grepl(".*geomet.*", 
+                                              colnames(all_hectads)))]
+    table_nobs <- data.frame(table(sp_df$hectad)) # count nrec per hectad
+    colnames(table_nobs) <- c("hectad", "nrec")
+    # add number of recs
+    all_hectads <- left_join(all_hectads, table_nobs, by = "hectad")
+    all_hectads$nrec[is.na(all_hectads$nrec)] <- 0
+    # sum number of recs per subsample block
+    all_hectads <- group_by(all_hectads, subsamp_blocks) %>%
+      summarise(nrec = sum(nrec))
+    simps_train_subsampBlock <- simpson_even(as.numeric(all_hectads$nrec))
+    rm(all_hectads, blks, lst_spat)
   } else {
-    simps_train <- NA
+    simps_train_hec <- NA
+    simps_train_subsampBlock <- NA
   }
   
   
@@ -166,7 +215,8 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
     block_cv_range = block_cv_range, 
     n_detections_test_fold = try(sum(sp_df[sp_df$folds == test_fold, 
                                            sp_name])),
-    simpson_training = simps_train, 
+    simpson_training_hectad = simps_train_hec, 
+    simpson_training_subsampBlock = simps_train_subsampBlock, 
     proportion_detections = prop_dets), 
     error = function(x) "No list exported from fit_rf.")
 }
@@ -174,7 +224,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
 
 call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df, 
                         pred_names, spatial.under.sample, block_subsamp, mtry, 
-                        ...) {
+                        pred_brick, block_range_spat_undersamp, ...) {
   # Function to call fit_rf on each species in a list of species dfs
   # First spatially sub-sample non-detection records to even absence records
   # and improve class balance (presuming sp. is rare)  
@@ -219,7 +269,7 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   
   if(spatial.under.sample) {
     # add a column of subsampling block assignments by chosing randomly from
-    # the many allocatins created in "prepare_objects_for_SDM.R"
+    # the many allocations created in "prepare_objects_for_SDM.R"
     sp_df$spat_subsamp_cell <- block_subsamp[, sample(2:(ncol(block_subsamp)-1), 
                                                          size = 1)]
     # spatially sub-sample absence checklists to 1 per cell
@@ -255,7 +305,8 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
   lapply(1:n_folds, FUN = fit_rf, sp_name = sp_name, 
          sp_df = sp_df, pred_names = pred_names, newdata = newdata, 
          sp_df_original = sp_df_original, mtry = mtry, 
-         block_cv_range = fold_assignments$range)
+         block_cv_range = fold_assignments$range, pred_brick = pred_brick,
+         block_range_spat_undersamp = block_range_spat_undersamp)
 }
 
 
@@ -264,18 +315,22 @@ call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df,
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  day_ll_rf_fits <- mclapply(fold_assignments, 
-                             sp_name = sp_name, 
-                             FUN = call_fit_rf, 
-                             sp_df = mill_wide, 
-                             pred_names = c("sin_doy", "cos_doy", 
-                                            "list_length"), #"day_of_year"
-                             block_subsamp = block_subsamp_10k, 
-                             spatial.under.sample = FALSE, 
-                             mtry = 1, 
-                             mc.cores = n_cores)
+  day_ll_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("sin_doy", "cos_doy", 
+                   "list_length"), #"day_of_year"
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = FALSE, 
+    mtry = 1, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(day_ll_rf_fits)))
-  try(saveRDS(day_ll_rf_fits, paste0("day_ll_rf_noSubSamp_fits_", 
+  try(saveRDS(day_ll_rf_fits, paste0("./saved_objects/", 
+                                     "day_ll_rf_noSubSamp_fits_", 
                                      gsub(" ", "_", sp_name),
                                      ".rds")))
   rm(day_ll_rf_fits)
@@ -284,18 +339,22 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially subsampled data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  day_ll_rf_fits <- mclapply(fold_assignments, 
-                             sp_name = sp_name, 
-                             FUN = call_fit_rf, 
-                             sp_df = mill_wide, 
-                             pred_names = c("sin_doy", "cos_doy", 
-                                            "list_length"), #"day_of_year",
-                             block_subsamp = block_subsamp_10k, 
-                             spatial.under.sample = TRUE, 
-                             mtry = 1,
-                             mc.cores = n_cores)
+  day_ll_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("sin_doy", "cos_doy", 
+                   "list_length"), #"day_of_year",
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = TRUE, 
+    mtry = 1,
+    mc.cores = n_cores)
   try(print(pryr::object_size(day_ll_rf_fits)))
-  try(saveRDS(day_ll_rf_fits, paste0("day_ll_rf_SubSamp_fits_", 
+  try(saveRDS(day_ll_rf_fits, paste0("./saved_objects/", 
+                                     "day_ll_rf_SubSamp_fits_", 
                                      gsub(" ", "_", sp_name),
                                      ".rds")))
   rm(day_ll_rf_fits)
@@ -306,20 +365,24 @@ for(i in 1:length(sp_to_fit)) {
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  spat_rf_fits <- mclapply(fold_assignments, 
-                           sp_name = sp_name, 
-                           FUN = call_fit_rf, 
-                           sp_df = mill_wide, 
-                           pred_names = c("eastings", "northings", 
-                                          "sin_doy", "cos_doy", "list_length"),
-                           block_subsamp = block_subsamp_10k, 
-                           spatial.under.sample = FALSE, 
-                           mtry = 2, 
-                           mc.cores = n_cores)
+  spat_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("eastings", "northings", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = FALSE, 
+    mtry = 2, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
-  try(saveRDS(spat_rf_fits, paste0("spat_ll_rf_noSubSamp_fits_", 
-                                     gsub(" ", "_", sp_name),
-                                     ".rds")))
+  try(saveRDS(spat_rf_fits, paste0("./saved_objects/", 
+                                   "spat_ll_rf_noSubSamp_fits_", 
+                                   gsub(" ", "_", sp_name),
+                                   ".rds")))
   
   # retrieve predictions with standardized sampling effort
   mill_predictions <- lapply(
@@ -330,7 +393,8 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(lapply(mill_predictions, 
                              FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_ll_rf_noSubSamp_", 
+  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
+                                       "mill_predictions_spat_ll_rf_noSubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(spat_rf_fits, mill_predictions)
@@ -339,18 +403,22 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially undersampled data 
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  spat_rf_fits <- mclapply(fold_assignments, 
-                           sp_name = sp_name, 
-                           FUN = call_fit_rf, 
-                           sp_df = mill_wide, 
-                           pred_names = c("eastings", "northings", 
-                                          "sin_doy", "cos_doy", "list_length"),
-                           block_subsamp = block_subsamp_10k, 
-                           spatial.under.sample = TRUE, 
-                           mtry = 2, 
-                           mc.cores = n_cores)
+  spat_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("eastings", "northings", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = TRUE, 
+    mtry = 2, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(spat_rf_fits)))
-  try(saveRDS(spat_rf_fits, paste0("spat_ll_rf_SubSamp_fits_", 
+  try(saveRDS(spat_rf_fits, paste0("./saved_objects/", 
+                                   "spat_ll_rf_SubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
                                    ".rds")))
   
@@ -363,7 +431,8 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(
     lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_spat_ll_rf_SubSamp_", 
+  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
+                                       "mill_predictions_spat_ll_rf_SubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   
@@ -376,22 +445,26 @@ for(i in 1:length(sp_to_fit)) {
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments, 
-                          sp_name = sp_name, 
-                          FUN = call_fit_rf, 
-                          sp_df = mill_wide, 
-                          pred_names = c("mean_tn", "mean_tx", 
-                                         "mean_rr", "artificial_surfaces", 
-                                         "forest_seminatural_l1", 
-                                         "wetlands_l1", "pasture_l2", 
-                                         "arable_l2", "elev", 
-                                         "sin_doy", "cos_doy", "list_length"),
-                          block_subsamp = block_subsamp_10k, 
-                          spatial.under.sample = FALSE, 
-                          mtry = 3, 
-                          mc.cores = n_cores)
+  env_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("mean_tn", "mean_tx", 
+                   "mean_rr", "artificial_surfaces", 
+                   "forest_seminatural_l1", 
+                   "wetlands_l1", "pasture_l2", 
+                   "arable_l2", "elev", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = FALSE, 
+    mtry = 3, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_ll_rf_noSubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
+                                  "env_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -404,7 +477,8 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(lapply(mill_predictions, 
                                        FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_env_ll_rf_noSubSamp_", 
+  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
+                                       "mill_predictions_env_ll_rf_noSubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(env_rf_fits, mill_predictions)
@@ -413,22 +487,26 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially subsampled data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments, 
-                          sp_name = sp_name, 
-                          FUN = call_fit_rf, 
-                          sp_df = mill_wide, 
-                          pred_names = c("mean_tn", "mean_tx", 
-                                         "mean_rr", "artificial_surfaces", 
-                                         "forest_seminatural_l1", 
-                                         "wetlands_l1", "pasture_l2", 
-                                         "arable_l2", "elev", 
-                                         "sin_doy", "cos_doy", "list_length"),
-                          block_subsamp = block_subsamp_10k, 
-                          spatial.under.sample = TRUE, 
-                          mtry = 3, 
-                          mc.cores = n_cores)
+  env_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("mean_tn", "mean_tx", 
+                   "mean_rr", "artificial_surfaces", 
+                   "forest_seminatural_l1", 
+                   "wetlands_l1", "pasture_l2", 
+                   "arable_l2", "elev", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = TRUE, 
+    mtry = 3, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_ll_rf_SubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
+                                  "env_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -441,7 +519,8 @@ for(i in 1:length(sp_to_fit)) {
   mill_predictions <- bind_rows(
     lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
-  try(saveRDS(mill_predictions, paste0("mill_predictions_env_ll_rf_SubSamp_", 
+  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
+                                       "mill_predictions_env_ll_rf_SubSamp_", 
                                        gsub(" ", "_", sp_name),
                                        ".rds")))
   rm(env_rf_fits, mill_predictions)
@@ -452,23 +531,27 @@ for(i in 1:length(sp_to_fit)) {
 # train with raw data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments, 
-                          sp_name = sp_name, 
-                          FUN = call_fit_rf, 
-                          sp_df = mill_wide, 
-                          pred_names = c("mean_tn", "mean_tx", 
-                                         "mean_rr", "artificial_surfaces", 
-                                         "forest_seminatural_l1", 
-                                         "wetlands_l1", "pasture_l2", 
-                                         "arable_l2", "elev", 
-                                         "eastings", "northings", 
-                                         "sin_doy", "cos_doy", "list_length"),
-                          block_subsamp = block_subsamp_10k, 
-                          spatial.under.sample = FALSE, 
-                          mtry = 4, 
-                          mc.cores = n_cores)
+  env_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("mean_tn", "mean_tx", 
+                   "mean_rr", "artificial_surfaces", 
+                   "forest_seminatural_l1", 
+                   "wetlands_l1", "pasture_l2", 
+                   "arable_l2", "elev", 
+                   "eastings", "northings", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = FALSE, 
+    mtry = 4, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_spat_ll_rf_noSubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
+                                  "env_spat_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -482,7 +565,8 @@ for(i in 1:length(sp_to_fit)) {
                                        FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
   try(saveRDS(mill_predictions, 
-              paste0("mill_predictions_env_spat_ll_rf_noSubSamp_", 
+              paste0("./saved_objects/", 
+                     "mill_predictions_env_spat_ll_rf_noSubSamp_", 
                      gsub(" ", "_", sp_name),
                      ".rds")))
   rm(env_rf_fits, mill_predictions)
@@ -491,23 +575,27 @@ for(i in 1:length(sp_to_fit)) {
 # train with spatially subsampled data
 for(i in 1:length(sp_to_fit)) {
   sp_name <- names(sp_to_fit)[i]
-  env_rf_fits <- mclapply(fold_assignments, 
-                          sp_name = sp_name, 
-                          FUN = call_fit_rf, 
-                          sp_df = mill_wide, 
-                          pred_names = c("mean_tn", "mean_tx", 
-                                         "mean_rr", "artificial_surfaces", 
-                                         "forest_seminatural_l1", 
-                                         "wetlands_l1", "pasture_l2", 
-                                         "arable_l2", "elev", 
-                                         "eastings", "northings", 
-                                         "sin_doy", "cos_doy", "list_length"),
-                          block_subsamp = block_subsamp_10k, 
-                          spatial.under.sample = TRUE, 
-                          mtry = 4, 
-                          mc.cores = n_cores)
+  env_rf_fits <- mclapply(
+    fold_assignments, 
+    sp_name = sp_name, 
+    FUN = call_fit_rf, 
+    sp_df = mill_wide, 
+    pred_names = c("mean_tn", "mean_tx", 
+                   "mean_rr", "artificial_surfaces", 
+                   "forest_seminatural_l1", 
+                   "wetlands_l1", "pasture_l2", 
+                   "arable_l2", "elev", 
+                   "eastings", "northings", 
+                   "sin_doy", "cos_doy", "list_length"),
+    block_subsamp = block_subsamp_10k, 
+    block_range_spat_undersamp = block_range_spat_undersamp, 
+    pred_brick = pred_brick,
+    spatial.under.sample = TRUE, 
+    mtry = 4, 
+    mc.cores = n_cores)
   try(print(pryr::object_size(env_rf_fits)))
-  try(saveRDS(env_rf_fits, paste0("env_spat_ll_rf_SubSamp_fits_", 
+  try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
+                                  "env_spat_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
   
@@ -521,18 +609,19 @@ for(i in 1:length(sp_to_fit)) {
     lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
   
   try(saveRDS(mill_predictions, 
-              paste0("mill_predictions_env_spat_ll_rf_SubSamp_", 
+              paste0("./saved_objects/", 
+                     "mill_predictions_env_spat_ll_rf_SubSamp_", 
                      gsub(" ", "_", sp_name), ".rds")))
   rm(env_rf_fits, mill_predictions)
 }
-### end environmental + LL + DOY model ------------------------------------
+### end environmental + Lat + Lon + LL + DOY model ----------------------------
 ### end fit random forest ----------------------------------------------------
 
 
 for(mod_name in mod_names) {
   for(i in 1:length(sp_to_fit)) {
     ### trained with raw data
-    fits <- readRDS(paste0(mod_name, "_noSubSamp_fits_", 
+    fits <- readRDS(paste0("./saved_objects/", mod_name, "_noSubSamp_fits_", 
                            gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
     sp_name <- names(sp_to_fit)[i]
     
@@ -546,7 +635,8 @@ for(mod_name in mod_names) {
       mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
     # save results
     try(saveRDS(mill_predictions, 
-                paste0("standard_predictions_", mod_name, "_noSubSamp_", 
+                paste0("./saved_objects/", "standard_predictions_", 
+                       mod_name, "_noSubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     
     ## get variable importance (averaged over 3 folds) 
@@ -564,47 +654,51 @@ for(mod_name in mod_names) {
     var_imp <- bind_rows(var_imp)
     # save results
     try(saveRDS(var_imp, 
-                paste0("var_importance_", mod_name, "_noSubSamp_", 
+                paste0("./saved_objects/", 
+                       "var_importance_", mod_name, "_noSubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     
-    ## get partial dependence
-    # have to do this in for loops because when using lapply it seems R can't
-    # interpret a variable holding the name of the variable to get plot for
-    # in the partialPlot call.
-    pd_list <- list()
-    # loop through versions of this model for this species
-    for(fi in 1:length(fits)) { 
-      fits_pd <- list()
-      for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
-        mod <- fits[[fi]][[xi]]$m
-        vars <- as.character(rownames(importance(mod))) # get variable names
-        # get partial dependence for each variable
-        pl <- list()
-        for(vb in 1:length(vars)) {
-          pd <- data.frame(partialPlot(mod, 
-                                       pred.data = data.frame(mill_wide), 
-                                       x.var = vars[vb], plot = FALSE))
-          pd$variable <- vars[vb]
-          pd$species <- sp_name
-          pd$model <- mod_name
-          pd$train_data <- "raw"
-          pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
-          pl[[vb]] <- pd
+    if(get_partial_dependence) {
+      ## get partial dependence
+      # have to do this in for loops because when using lapply it seems R can't
+      # interpret a variable holding the name of the variable to get plot for
+      # in the partialPlot call.
+      pd_list <- list()
+      # loop through versions of this model for this species
+      for(fi in 1:length(fits)) { 
+        fits_pd <- list()
+        for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
+          mod <- fits[[fi]][[xi]]$m
+          vars <- as.character(rownames(importance(mod))) # get variable names
+          # get partial dependence for each variable
+          pl <- list()
+          for(vb in 1:length(vars)) {
+            pd <- data.frame(partialPlot(mod, 
+                                         pred.data = data.frame(mill_wide), 
+                                         x.var = vars[vb], plot = FALSE))
+            pd$variable <- vars[vb]
+            pd$species <- sp_name
+            pd$model <- mod_name
+            pd$train_data <- "raw"
+            pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
+            pl[[vb]] <- pd
+          }
+          pl <- bind_rows(pl)
+          fits_pd[[xi]] <- pl
         }
-        pl <- bind_rows(pl)
-        fits_pd[[xi]] <- pl
+        pd_list[[fi]] <- bind_rows(fits_pd)
       }
-      pd_list[[fi]] <- bind_rows(fits_pd)
-    }
-    pd_list <- bind_rows(pd_list)
-    # save results
-    try(saveRDS(pd_list, 
-                paste0("partial_dependence_", mod_name, "_noSubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+      pd_list <- bind_rows(pd_list)
+      # save results
+      try(saveRDS(pd_list, 
+                  paste0("./saved_objects/", 
+                         "partial_dependence_", mod_name, "_noSubSamp_", 
+                         gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    } # end get partial dependence 
     rm(fits)
     
     ######### trained with spatial subsampling #############################
-    fits <- readRDS(paste0(mod_name, "_SubSamp_fits_", 
+    fits <- readRDS(paste0("./saved_objects/", mod_name, "_SubSamp_fits_", 
                            gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
     
     # Get predictions with standardized survey effort
@@ -617,7 +711,8 @@ for(mod_name in mod_names) {
       mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
     # save results
     try(saveRDS(mill_predictions, 
-                paste0("standard_predictions_", mod_name, "_SubSamp_", 
+                paste0("./saved_objects/", 
+                       "standard_predictions_", mod_name, "_SubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     
     # get variable importance (averaged over 5 folds) 
@@ -635,43 +730,47 @@ for(mod_name in mod_names) {
     var_imp <- bind_rows(var_imp)
     # save results
     try(saveRDS(var_imp, 
-                paste0("var_importance_", mod_name, "_SubSamp_", 
+                paste0("./saved_objects/", 
+                       "var_importance_", mod_name, "_SubSamp_", 
                        gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
     
-    ## get partial dependence
-    # have to do this in for loops because when using lapply it seems R can't
-    # interpret a variable holding the name of the variable to get plot for
-    # in the partialPlot call.
-    pd_list <- list()
-    # loop through versions of this model for this species
-    for(fi in 1:length(fits)) { 
-      fits_pd <- list()
-      for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
-        mod <- fits[[fi]][[xi]]$m
-        vars <- as.character(rownames(importance(mod))) # get variable names
-        # get partial dependence for each variable
-        pl <- list()
-        for(vb in 1:length(vars)) {
-          pd <- data.frame(partialPlot(mod, 
-                                       pred.data = data.frame(mill_wide), 
-                                       x.var = vars[vb], plot = FALSE))
-          pd$variable <- vars[vb]
-          pd$species <- sp_name
-          pd$model <- mod_name
-          pd$train_data <- "raw"
-          pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
-          pl[[vb]] <- pd
+    if(get_partial_dependence) {
+      ## get partial dependence
+      # have to do this in for loops because when using lapply it seems R can't
+      # interpret a variable holding the name of the variable to get plot for
+      # in the partialPlot call.
+      pd_list <- list()
+      # loop through versions of this model for this species
+      for(fi in 1:length(fits)) { 
+        fits_pd <- list()
+        for(xi in 1:length(fits[[fi]])) { # loop through all cv folds
+          mod <- fits[[fi]][[xi]]$m
+          vars <- as.character(rownames(importance(mod))) # get variable names
+          # get partial dependence for each variable
+          pl <- list()
+          for(vb in 1:length(vars)) {
+            pd <- data.frame(partialPlot(mod, 
+                                         pred.data = data.frame(mill_wide), 
+                                         x.var = vars[vb], plot = FALSE))
+            pd$variable <- vars[vb]
+            pd$species <- sp_name
+            pd$model <- mod_name
+            pd$train_data <- "raw"
+            pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
+            pl[[vb]] <- pd
+          }
+          pl <- bind_rows(pl)
+          fits_pd[[xi]] <- pl
         }
-        pl <- bind_rows(pl)
-        fits_pd[[xi]] <- pl
+        pd_list[[fi]] <- bind_rows(fits_pd)
       }
-      pd_list[[fi]] <- bind_rows(fits_pd)
-    }
-    pd_list <- bind_rows(pd_list)
-    # save results
-    try(saveRDS(pd_list, 
-                paste0("partial_dependence_", mod_name, "_SubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+      pd_list <- bind_rows(pd_list)
+      # save results
+      try(saveRDS(pd_list, 
+                  paste0("./saved_objects/", 
+                         "partial_dependence_", mod_name, "_SubSamp_", 
+                         gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+    } # end get partial dependence plots
     rm(fits)
   }
 }

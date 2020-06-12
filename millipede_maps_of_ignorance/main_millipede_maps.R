@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 10 June 2020
+## last modified: 12 June 2020
 #################################
 warning("TODO: 21 May 2020: Re-set the number of spatial undersamplingn block configurations to make to a higher number (e.g. 2000 or something much more than the number of models to test and fit).")
 
@@ -23,6 +23,8 @@ run_brt <- F
 run_rf <- T
 make_sampling_plots <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
+get_partial_dependence <- F # calculate partial dependence plots (time consuming)
+
 n_folds <- 3 # number of cross-validation folds to use
 n_cv_trials <- 3 # number of different cross-validation fold layouts to use
 cv_block_sizes <- c("random", 100000) # sizes of CV spatial blocks (in meters)

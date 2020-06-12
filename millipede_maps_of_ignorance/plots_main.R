@@ -14,10 +14,11 @@
 t_size <- 12
 
 # spatial evenness of training and test datasets
-ggplot(data = evals[!is.na(evals$simpson_training) &
-                      evals$train_data == "spat_subsamp", ], 
+ggplot(data = evals[!is.na(evals$simpson_training), ], 
        aes(x = factor(block_cv_range), y = simpson_training)) + 
-  geom_boxplot()
+  geom_boxplot() + 
+  facet_wrap(~train_data) + 
+  ggtitle("Spatial Evenness calculated at hectad scale\nincluding hectads with zero observations")
 
 mapply(FUN = function(x, nm) hist(x, main = nm, 
                                   xlab = "Simpson Evenness - Test data"), 
@@ -168,7 +169,7 @@ ggplot(data = evals[evals$metric == "Brier" &
 
 ### plot variable importance ---------------------------------------------------
 # read in variable importance results
-vimp <- list.files()
+vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
 vimp <- lapply(vimp, readRDS)
 # average the variable importance from each CV fold
@@ -195,7 +196,7 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 
 ### plot partial dependence ---------------------------------------------------
 # read in partial dependence files
-pd <- list.files()
+pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
 pd <- lapply(pd, readRDS)
 # average the dependence for each variable from each CV fold
@@ -221,13 +222,15 @@ pd_plots <- lapply(pd, FUN = function(x) {
 for(i in 1:length(pd_plots)) print(pd_plots[i])
 
 # see effect of DOY by looking at standardized predictions
-stpred <- list.files()
+# load standardized predictions
+stpred <- list.files("./saved_objects/")
 stpred <- stpred[grepl("standard_pre.*", stpred)]
 names(stpred) <- gsub("standard.*tions_", "", stpred)
 names(stpred) <- gsub(".rds", "", names(stpred))
-stpred <- lapply(stpred, readRDS)
+stpred <- lapply(stpred, 
+                 FUN = function(x) readRDS(paste0("./saved_objects/", x)))
 # average predictions for each day of year (taking average over all locations)
-stpred <- lapply(stpred, FUN = function(x) {
+doy_plots <- lapply(stpred, FUN = function(x) {
   # keep only random CV predictions
   dat <- x[x$cv == "random", ]
   dat <- group_by(dat, day_of_year) %>%
@@ -242,72 +245,39 @@ stpred <- lapply(stpred, FUN = function(x) {
     theme_bw()
 })
 
-stpred <- mapply(FUN = function(x, nm) {x + ggtitle(nm)}, 
-                 stpred, names(stpred), SIMPLIFY = FALSE)
+doy_plots <- mapply(FUN = function(x, nm) {x + ggtitle(nm)}, 
+                    doy_plots, names(doy_plots), SIMPLIFY = FALSE)
 
-for(i in 1:length(stpred)) print(stpred[i])
+for(i in 1:length(doy_plots)) print(doy_plots[i])
 ### end plot partial dependence ------------------------------------------------
 
 
-## ###$#$#$#$@#@#@#@#@#@#@ old
-
-
-
-
-
-
+### plot predictions with standardized list length ----------------------------
 # plot average of predictions from all 5 folds (so 4 predictions will be to
 # training data, one prediction to test data in each grid cell)
+prediction_plots <- mapply(FUN = function(x, nm, mill) {
+  # map only predictions from random CV
+  dat <- x[x$cv == "random", ]
+  sp <- gsub(".*Samp_", "", nm)
+  sp <- gsub("_", " ", sp)
+  mod <- gsub("_SubSamp.*|_noSub.*", "", nm)
+  train_data <- gsub("^.*_rf_", "", nm)
+  train_data <- gsub("_.*_.*$", "", train_data)
+  
+  dat <- group_by(dat, hectad) %>%
+    summarise(mean_prediction = mean(pred, na.rm = T), 
+              eastings = mean(eastings), northings = mean(northings))
+  ggplot() + 
+    geom_tile(data = dat, 
+              aes(x = eastings, y = northings, fill = mean_prediction)) + 
+    geom_point(data = mill, aes(x = eastings, y = northings),
+               color = "light grey", size = 0.5) +
+    geom_point(data = mill[mill$Genus_species == sp, ],
+               aes(x = eastings, y = northings), color = "orange") +
+    ggtitle(paste0(sp, "\n", mod, " trained with ", train_data))
+}, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
 
-# spatial model - raw data
-mill_predictions_spat_ll_rf_raw <- list(
-  `Ommatoiulus sabulosus` = readRDS("mill_predictions_spat_ll_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
-  `Tachypodoiulus niger` = readRDS("mill_predictions_spat_ll_rf_noSubSamp_Tachypodoiulus_niger.rds"))
-mill_predictions_spat_ll_rf_raw <- lapply(
-  mill_predictions_spat_ll_rf_raw, FUN= function(x) {
-    group_by(x, hectad) %>%
-      summarise(mean_prediction = mean(pred, na.rm = T), 
-                eastings = mean(eastings), northings = mean(northings))
-  })
-
-for(i in 1:length(mill_predictions_spat_ll_rf_raw)) {
-  print(ggplot() + 
-          geom_tile(data = mill_predictions_spat_ll_rf_raw[[i]], 
-                    aes(x = eastings, y = northings, fill = mean_prediction)) + 
-          geom_point(data = mill, aes(x = eastings, y = northings),
-                     color = "light grey", size = 0.5) +
-          geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_spat_ll_rf_raw)[i], ],
-                     aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_spat_ll_rf_raw)[i], 
-                         " - spatial model"))
-  )
-}
-
-
-# environmental variables model - raw data
-mill_predictions_env_rf_raw <- list(
-  `Ommatoiulus sabulosus` = readRDS("mill_predictions_env_rf_noSubSamp_Ommatoiulus_sabulosus.rds"), 
-  `Tachypodoiulus niger` = readRDS("mill_predictions_env_rf_noSubSamp_Tachypodoiulus_niger.rds"))
-mill_predictions_env_rf_raw <- lapply(
-  mill_predictions_env_rf_raw, FUN= function(x) {
-    group_by(x, hectad) %>%
-      summarise(mean_prediction = mean(pred, na.rm = T), 
-                eastings = mean(eastings), northings = mean(northings))
-  })
-
-for(i in 1:length(mill_predictions_env_rf_raw)) {
-  print(ggplot() + 
-          geom_tile(data = mill_predictions_env_rf_raw[[i]], 
-                    aes(x = eastings, y = northings, fill = mean_prediction)) + 
-          geom_point(data = mill, aes(x = eastings, y = northings),
-                     color = "light grey", size = 0.5) +
-          geom_point(data = mill[mill$Genus_species ==
-                                   names(mill_predictions_env_rf_raw)[i], ],
-                     aes(x = eastings, y = northings), color = "orange") +
-          ggtitle(paste0(names(mill_predictions_env_rf_raw)[i], 
-                         " - environmental model"))
-  )
-}
+for(i in 1:length(prediction_plots)) print(prediction_plots[i])
+### end plot standardized predictions -----------------------------------------
 
 
