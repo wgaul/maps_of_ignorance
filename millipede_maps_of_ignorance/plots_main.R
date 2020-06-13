@@ -14,12 +14,20 @@
 t_size <- 12
 
 # spatial evenness of training and test datasets
-ggplot(data = evals[!is.na(evals$simpson_training), ], 
-       aes(x = factor(block_cv_range), y = simpson_training)) + 
+ggplot(data = evals[!is.na(evals$simpson_training_hectad), ], 
+       aes(x = factor(block_cv_range), y = simpson_training_hectad)) + 
   geom_boxplot() + 
   facet_wrap(~train_data) + 
   ggtitle("Spatial Evenness calculated at hectad scale\nincluding hectads with zero observations")
 
+# spatial evenness of training and test datasets
+ggplot(data = evals[!is.na(evals$simpson_training_subsampBlock), ], 
+       aes(x = factor(block_cv_range), y = simpson_training_subsampBlock)) + 
+  geom_boxplot() + 
+  facet_wrap(~train_data) + 
+  ggtitle("Spatial Evenness calculated at subsample block scale\nincluding hectads with zero observations")
+
+warning("re-do evenness for test data to include zero hectads.")
 mapply(FUN = function(x, nm) hist(x, main = nm, 
                                   xlab = "Simpson Evenness - Test data"), 
        evenness_test, names(evenness_test))
@@ -34,11 +42,11 @@ ggplot(data = evals[evals$metric == "AUC" &
            y = value, 
            color = factor(
              model, 
-             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+             levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
                         "env_spat_ll_rf"), 
              labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n",
                         "\nEnvironment +\nDOY +\nList Length\n", 
-                        "\nLat + Lon +\nDOY +\nList Length\n", 
                         "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
@@ -59,13 +67,14 @@ ggplot(data = evals[evals$metric == "Kappa" &
                       levels = c("raw", "spat_subsamp"), 
                       labels =  c("raw", "spatially\nundersampled")), 
            y = value, 
-           color = factor(model, 
-                          levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
-                                     "env_spat_ll_rf"), 
-                          labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                                     "\nEnvironment + DOY +\nList Length\n", 
-                                     "\nLat + Lon + DOY +\nList Length\n", 
-                                     "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year (DOY) +\nList Length\n",  
+                        "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n",
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
     test_data, 
@@ -88,11 +97,11 @@ ggplot(data = evals[evals$metric == "sensitivity" &
            y = value, 
            color = factor(
              model, 
-             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf",  
                         "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
+             labels = c("\nDay of Year (DOY) +\nList Length\n",  
                         "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
                         "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
@@ -117,11 +126,11 @@ ggplot(data = evals[evals$metric == "specificity" &
            y = value, 
            color = factor(
              model, 
-             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf",
+             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
                         "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
+             labels = c("\nDay of Year (DOY) +\nList Length\n",
                         "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
                         "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
@@ -145,11 +154,11 @@ ggplot(data = evals[evals$metric == "Brier" &
            y = value, 
            color = factor(
              model, 
-             levels = c("day_ll_rf", "env_ll_rf", "spat_ll_rf", 
+             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
                         "env_spat_ll_rf"), 
              labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
                         "\nLat + Lon + DOY +\nList Length\n", 
+                        "\nEnvironment + DOY +\nList Length\n", 
                         "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
   geom_boxplot() + 
   facet_wrap(~species + factor(
@@ -171,7 +180,7 @@ ggplot(data = evals[evals$metric == "Brier" &
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
-vimp <- lapply(vimp, readRDS)
+vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the variable importance from each CV fold
 vimp <- lapply(vimp, FUN = function(x) {
   group_by(x, variable, cv) %>%
@@ -198,7 +207,8 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
-pd <- lapply(pd, readRDS)
+names(pd) <- pd
+pd <- lapply(pd, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the dependence for each variable from each CV fold
 pd <- lapply(pd, FUN = function(x) {
   group_by(x, x, variable, cv) %>%

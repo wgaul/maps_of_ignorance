@@ -163,7 +163,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
     all_hectads <- left_join(all_hectads, table_nobs, by = "hectad")
     all_hectads$nrec[is.na(all_hectads$nrec)] <- 0
     simps_train_hec <- simpson_even(as.numeric(all_hectads$nrec))
-    browser()   
+   
     ## calculate at spatial subsampling block scale (e.g. 30k X 30km)
     lst_spat <- SpatialPointsDataFrame(
       coords = sp_df[, c("eastings", "northings")], 
@@ -383,21 +383,7 @@ for(i in 1:length(sp_to_fit)) {
                                    "spat_ll_rf_noSubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
                                    ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    spat_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(lapply(mill_predictions, 
-                             FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
-                                       "mill_predictions_spat_ll_rf_noSubSamp_", 
-                                       gsub(" ", "_", sp_name),
-                                       ".rds")))
-  rm(spat_rf_fits, mill_predictions)
+  rm(spat_rf_fits)
 }
 
 # train with spatially undersampled data 
@@ -421,22 +407,7 @@ for(i in 1:length(sp_to_fit)) {
                                    "spat_ll_rf_SubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
                                    ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    spat_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(
-    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
-                                       "mill_predictions_spat_ll_rf_SubSamp_", 
-                                       gsub(" ", "_", sp_name),
-                                       ".rds")))
-  
-  rm(spat_rf_fits, mill_predictions)
+  rm(spat_rf_fits)
 }
 ### end spatial + List Length + DOY models ------------------------------------
 
@@ -467,21 +438,7 @@ for(i in 1:length(sp_to_fit)) {
                                   "env_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    env_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(lapply(mill_predictions, 
-                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
-                                       "mill_predictions_env_ll_rf_noSubSamp_", 
-                                       gsub(" ", "_", sp_name),
-                                       ".rds")))
-  rm(env_rf_fits, mill_predictions)
+  rm(env_rf_fits)
 }
 
 # train with spatially subsampled data
@@ -509,21 +466,7 @@ for(i in 1:length(sp_to_fit)) {
                                   "env_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    env_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(
-    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, paste0("./saved_objects/", 
-                                       "mill_predictions_env_ll_rf_SubSamp_", 
-                                       gsub(" ", "_", sp_name),
-                                       ".rds")))
-  rm(env_rf_fits, mill_predictions)
+  rm(env_rf_fits)
 }
 ### end environmental + LL + DOY model ------------------------------------
 
@@ -554,22 +497,7 @@ for(i in 1:length(sp_to_fit)) {
                                   "env_spat_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    env_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(lapply(mill_predictions, 
-                                       FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, 
-              paste0("./saved_objects/", 
-                     "mill_predictions_env_spat_ll_rf_noSubSamp_", 
-                     gsub(" ", "_", sp_name),
-                     ".rds")))
-  rm(env_rf_fits, mill_predictions)
+  rm(env_rf_fits)
 }
 
 # train with spatially subsampled data
@@ -598,21 +526,7 @@ for(i in 1:length(sp_to_fit)) {
                                   "env_spat_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
                                   ".rds")))
-  
-  # retrieve predictions with standardized sampling effort
-  mill_predictions <- lapply(
-    env_rf_fits, 
-    FUN = function(x) {lapply(x[sapply(x, is.list)], FUN = function(x) {
-      tryCatch(x$standardized_preds, error = function(x) NA)})
-    })
-  mill_predictions <- bind_rows(
-    lapply(mill_predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
-  
-  try(saveRDS(mill_predictions, 
-              paste0("./saved_objects/", 
-                     "mill_predictions_env_spat_ll_rf_SubSamp_", 
-                     gsub(" ", "_", sp_name), ".rds")))
-  rm(env_rf_fits, mill_predictions)
+  rm(env_rf_fits)
 }
 ### end environmental + Lat + Lon + LL + DOY model ----------------------------
 ### end fit random forest ----------------------------------------------------
@@ -755,7 +669,7 @@ for(mod_name in mod_names) {
             pd$variable <- vars[vb]
             pd$species <- sp_name
             pd$model <- mod_name
-            pd$train_data <- "raw"
+            pd$train_data <- "spat_subsamp"
             pd$cv <- as.character(fits[[fi]][[xi]]$block_cv_range)
             pl[[vb]] <- pd
           }
@@ -774,9 +688,6 @@ for(mod_name in mod_names) {
     rm(fits)
   }
 }
-
-
-
 
 
 

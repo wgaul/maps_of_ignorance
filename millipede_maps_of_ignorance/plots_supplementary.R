@@ -37,73 +37,6 @@ ggpairs(data = mill, columns = which(colnames(mill) %in%
 ## end predictor variable correlatins --------------------------------------
 
 
-## calculate Simpson's evenness and sample size for an example training
-## dataset for adding a point to the contour plot (from simulation) -----------
-
-# make example spatial subsampling blocks 
-checklists_spat <- mill_wide[ , "checklist_ID"] # make df of checklists
-b_subsamp <- spatialBlock(checklists_spat, 
-                          theRange = block_range_spat_undersamp,
-                          k = n_folds, 
-                          selection = "random", 
-                          iteration = 5, 
-                          # rows = 20, cols = 20, 
-                          xOffset = runif(n = 1, min = 0, max = 1), 
-                          yOffset = runif(n = 1, min = 0, max = 1),
-                          showBlocks = FALSE, 
-                          rasterLayer = pred_brick$pasture_l2, 
-                          biomod2Format = FALSE)
-# add spatial subsampling grid cell ID to each hectad
-example_blocks <- st_join(
-  st_as_sf(newdata[newdata$day_of_year == newdata$day_of_year[1], ]), 
-  st_as_sf(b_subsamp$blocks[, names(
-    b_subsamp$blocks) == "layer"]))
-example_blocks <- data.frame(example_blocks)
-colnames(example_blocks)[which(
-  colnames(example_blocks) == "layer")] <- "subsamp_blocks"
-# remove geometry column
-example_blocks <- example_blocks[, -which(grepl(".*geomet.*", 
-                                                colnames(example_blocks)))]
-
-# subsample mill data to get example training checklists
-sp_df <- data.frame(mill_wide)
-sp_name <- "Ommatoiulus.sabulosus"
-sp_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
-  2:(ncol(block_subsamp_10k)-1), size = 1)]
-# spatially sub-sample absence checklists to 1 per cell
-# separate presence and absence checklists.  Keep all presence checklists.
-presences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 1, ]
-absences <- sp_df[sp_df[colnames(sp_df) == sp_name] == 0, ]
-cell_abs_tab <- table(absences$spat_subsamp_cell)
-keep_ab_rows <- c()
-for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
-  cell <- unique(absences$spat_subsamp_cell)[ri]
-  keep_ab_rows <- c(keep_ab_rows, 
-                    sample(which(absences$spat_subsamp_cell == cell), 
-                           size = 1))
-}
-absences <- absences[keep_ab_rows, ] 
-
-# combine spatially sub-sampled non-detection data with all detection data
-sp_df <- bind_rows(absences, presences)
-
-
-table_nobs <- data.frame(table(sp_df$hectad))
-colnames(table_nobs) <- c("hectad", "nrec")
-# add number of recs
-example_blocks <- left_join(example_blocks, table_nobs, by = "hectad")
-example_blocks$nrec[is.na(example_blocks$nrec)] <- 0
-# sum number of recs per subsample block
-example_blocks <- group_by(example_blocks, subsamp_blocks) %>%
-  summarise(nrec = sum(nrec))
-
-simpson_even(example_blocks$nrec) # print Simpson's evenness
-
-rm(sp_df, sp_name)
-## end calculate evenness and sample size from example training dataset ------
-
-
-
 ## plot results using random CV -----------------------------------------------
 # how many detections and non-detections in test folds?
 ndet_df <- pivot_longer(evals[evals$test_data == "spat_subsamp", ], 
@@ -193,3 +126,4 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
 })
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
+
