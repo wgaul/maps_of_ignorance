@@ -86,7 +86,7 @@ if(make_spatial_blocks) {
   # block assignemnts for each millipede record.
   
   checklists_spat <- mill_wide[ , "checklist_ID"] # make df of checklists
-  block_subsamp_10k <- checklists_spat
+  block_subsamp <- checklists_spat
   
   for(i in 1:n_subsamp_block_draws) {
     b_subsamp <- spatialBlock(checklists_spat, 
@@ -101,17 +101,17 @@ if(make_spatial_blocks) {
                               rasterLayer = pred_brick$pasture_l2, 
                               biomod2Format = FALSE)
     # add spatial subsampling grid cell ID
-    block_subsamp_10k <- st_join(
-      st_as_sf(block_subsamp_10k), 
+    block_subsamp <- st_join(
+      st_as_sf(block_subsamp), 
       st_as_sf(b_subsamp$blocks[, names(
         b_subsamp$blocks) == "layer"]))
   }
-  block_subsamp_10k <- data.frame(block_subsamp_10k)
+  block_subsamp <- data.frame(block_subsamp)
   # remove geometry column
-  block_subsamp_10k <- block_subsamp_10k[, -grepl(".*geomet.*", 
-                                                  colnames(block_subsamp_10k))]
+  block_subsamp <- block_subsamp[, -grepl(".*geomet.*", 
+                                                  colnames(block_subsamp))]
 } else {
-  block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
+  block_subsamp <- readRDS("block_subsamp.rds")
   fold_assignments <- readRDS("fold_assignments.rds")
 }
 ### end make spatial blocks ---------------------------------------------------
@@ -139,7 +139,7 @@ newdata <- SpatialPointsDataFrame(
 ### save objects for use on sonic ---------------------------------------------
 saveRDS(mill_wide, "mill_wide.rds")
 if(make_spatial_blocks) {
-  try(saveRDS(block_subsamp_10k, "block_subsamp_10k.rds"))
+  try(saveRDS(block_subsamp, "block_subsamp.rds"))
   try(saveRDS(fold_assignments, "fold_assignments.rds"))
 }
 saveRDS(newdata, "newdata.rds")

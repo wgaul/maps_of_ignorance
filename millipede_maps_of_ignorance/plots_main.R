@@ -9,7 +9,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 12 June 2020
+## last modified: 16 June 2020
 ##############################
 t_size <- 12
 
@@ -176,10 +176,11 @@ ggplot(data = evals[evals$metric == "Brier" &
 
 
 
-### plot variable importance ---------------------------------------------------
+### plot variable importance only for models of interest -----------------------
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
 vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the variable importance from each CV fold
 vimp <- lapply(vimp, FUN = function(x) {
@@ -191,8 +192,11 @@ vimp <- lapply(vimp, FUN = function(x) {
 
 vimp_plots <- lapply(vimp, FUN = function(x) {
   dat <- x[x$cv == "random", ]
+  dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
   ggplot(data = dat, 
-         aes(x = variable, y = MeanDecreaseGini)) + 
+         aes(x = factor(variable, levels = dat$variable, 
+                        labels = dat$variable, ordered = T), 
+             y = MeanDecreaseGini)) + 
     geom_bar(stat = "identity") + 
     coord_flip() + 
     ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
@@ -207,6 +211,7 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
+pd <- pd[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), pd)]
 names(pd) <- pd
 pd <- lapply(pd, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the dependence for each variable from each CV fold
@@ -235,6 +240,8 @@ for(i in 1:length(pd_plots)) print(pd_plots[i])
 # load standardized predictions
 stpred <- list.files("./saved_objects/")
 stpred <- stpred[grepl("standard_pre.*", stpred)]
+stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), 
+                       stpred)]
 names(stpred) <- gsub("standard.*tions_", "", stpred)
 names(stpred) <- gsub(".rds", "", names(stpred))
 stpred <- lapply(stpred, 
@@ -259,6 +266,7 @@ doy_plots <- mapply(FUN = function(x, nm) {x + ggtitle(nm)},
                     doy_plots, names(doy_plots), SIMPLIFY = FALSE)
 
 for(i in 1:length(doy_plots)) print(doy_plots[i])
+
 ### end plot partial dependence ------------------------------------------------
 
 
@@ -291,3 +299,14 @@ for(i in 1:length(prediction_plots)) print(prediction_plots[i])
 ### end plot standardized predictions -----------------------------------------
 
 
+
+### save figures and tables ---------------------------------------------------
+n_detections_per_species <- data.frame(table(mill$Genus_species))
+n_detections_per_species <- n_detections_per_species[order(
+  n_detections_per_species$Freq, decreasing = FALSE), ]
+colnames(n_detections_per_species) <- c("species", "number_of_detections")
+n_detections_per_species <- n_detections_per_species[
+  n_detections_per_species$species %in% sp_to_fit, ]
+n_detections_per_species
+
+### end save figures and tables -----------------------------------------------

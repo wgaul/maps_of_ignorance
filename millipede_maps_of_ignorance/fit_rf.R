@@ -10,7 +10,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 23 Jan 2020
-## last modified: 12 June 2020
+## last modified: 16 June 2020
 ##############################
 
 on_sonic <- F
@@ -21,7 +21,7 @@ if(!dir.exists("./saved_objects")) dir.create("./saved_objects")
 mill_wide <- readRDS("mill_wide.rds")
 newdata <- readRDS("newdata.rds")
 fold_assignments <- readRDS("fold_assignments.rds")
-block_subsamp_10k <- readRDS("block_subsamp_10k.rds")
+block_subsamp <- readRDS("block_subsamp.rds")
 
 ### fit random forest ---------------------------------------------------------
 fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata, 
@@ -322,7 +322,7 @@ for(i in 1:length(sp_to_fit)) {
     sp_df = mill_wide, 
     pred_names = c("sin_doy", "cos_doy", 
                    "list_length"), #"day_of_year"
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = FALSE, 
@@ -331,8 +331,8 @@ for(i in 1:length(sp_to_fit)) {
   try(print(pryr::object_size(day_ll_rf_fits)))
   try(saveRDS(day_ll_rf_fits, paste0("./saved_objects/", 
                                      "day_ll_rf_noSubSamp_fits_", 
-                                     gsub(" ", "_", sp_name),
-                                     ".rds")))
+                                     gsub(" ", "_", sp_name), 
+                                     analysis_resolution, ".rds")))
   rm(day_ll_rf_fits)
 }
 
@@ -346,7 +346,7 @@ for(i in 1:length(sp_to_fit)) {
     sp_df = mill_wide, 
     pred_names = c("sin_doy", "cos_doy", 
                    "list_length"), #"day_of_year",
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = TRUE, 
@@ -356,7 +356,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(day_ll_rf_fits, paste0("./saved_objects/", 
                                      "day_ll_rf_SubSamp_fits_", 
                                      gsub(" ", "_", sp_name),
-                                     ".rds")))
+                                     analysis_resolution, ".rds")))
   rm(day_ll_rf_fits)
 }
 ### end Day of Year + List Length --------------------------------------------
@@ -372,7 +372,7 @@ for(i in 1:length(sp_to_fit)) {
     sp_df = mill_wide, 
     pred_names = c("eastings", "northings", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = FALSE, 
@@ -382,7 +382,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(spat_rf_fits, paste0("./saved_objects/", 
                                    "spat_ll_rf_noSubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
-                                   ".rds")))
+                                   analysis_resolution, ".rds")))
   rm(spat_rf_fits)
 }
 
@@ -396,7 +396,7 @@ for(i in 1:length(sp_to_fit)) {
     sp_df = mill_wide, 
     pred_names = c("eastings", "northings", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = TRUE, 
@@ -406,6 +406,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(spat_rf_fits, paste0("./saved_objects/", 
                                    "spat_ll_rf_SubSamp_fits_", 
                                    gsub(" ", "_", sp_name),
+                                   analysis_resolution,
                                    ".rds")))
   rm(spat_rf_fits)
 }
@@ -421,13 +422,13 @@ for(i in 1:length(sp_to_fit)) {
     sp_name = sp_name, 
     FUN = call_fit_rf, 
     sp_df = mill_wide, 
-    pred_names = c("mean_tn", "mean_tx", 
+    pred_names = c("mean_tn", 
                    "mean_rr", "artificial_surfaces", 
                    "forest_seminatural_l1", 
                    "wetlands_l1", "pasture_l2", 
                    "arable_l2", "elev", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = FALSE, 
@@ -437,7 +438,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
                                   "env_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
-                                  ".rds")))
+                                  analysis_resolution, ".rds")))
   rm(env_rf_fits)
 }
 
@@ -449,13 +450,13 @@ for(i in 1:length(sp_to_fit)) {
     sp_name = sp_name, 
     FUN = call_fit_rf, 
     sp_df = mill_wide, 
-    pred_names = c("mean_tn", "mean_tx", 
+    pred_names = c("mean_tn",  
                    "mean_rr", "artificial_surfaces", 
                    "forest_seminatural_l1", 
                    "wetlands_l1", "pasture_l2", 
                    "arable_l2", "elev", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = TRUE, 
@@ -465,7 +466,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
                                   "env_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
-                                  ".rds")))
+                                  analysis_resolution, ".rds")))
   rm(env_rf_fits)
 }
 ### end environmental + LL + DOY model ------------------------------------
@@ -479,14 +480,13 @@ for(i in 1:length(sp_to_fit)) {
     sp_name = sp_name, 
     FUN = call_fit_rf, 
     sp_df = mill_wide, 
-    pred_names = c("mean_tn", "mean_tx", 
-                   "mean_rr", "artificial_surfaces", 
+    pred_names = c("mean_tn", "mean_rr", "artificial_surfaces", 
                    "forest_seminatural_l1", 
                    "wetlands_l1", "pasture_l2", 
                    "arable_l2", "elev", 
                    "eastings", "northings", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = FALSE, 
@@ -496,7 +496,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
                                   "env_spat_ll_rf_noSubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
-                                  ".rds")))
+                                  analysis_resolution, ".rds")))
   rm(env_rf_fits)
 }
 
@@ -508,14 +508,14 @@ for(i in 1:length(sp_to_fit)) {
     sp_name = sp_name, 
     FUN = call_fit_rf, 
     sp_df = mill_wide, 
-    pred_names = c("mean_tn", "mean_tx", 
+    pred_names = c("mean_tn",
                    "mean_rr", "artificial_surfaces", 
                    "forest_seminatural_l1", 
                    "wetlands_l1", "pasture_l2", 
                    "arable_l2", "elev", 
                    "eastings", "northings", 
                    "sin_doy", "cos_doy", "list_length"),
-    block_subsamp = block_subsamp_10k, 
+    block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
     pred_brick = pred_brick,
     spatial.under.sample = TRUE, 
@@ -525,7 +525,7 @@ for(i in 1:length(sp_to_fit)) {
   try(saveRDS(env_rf_fits, paste0("./saved_objects/", 
                                   "env_spat_ll_rf_SubSamp_fits_", 
                                   gsub(" ", "_", sp_name),
-                                  ".rds")))
+                                  analysis_resolution, ".rds")))
   rm(env_rf_fits)
 }
 ### end environmental + Lat + Lon + LL + DOY model ----------------------------
@@ -536,8 +536,24 @@ for(mod_name in mod_names) {
   for(i in 1:length(sp_to_fit)) {
     ### trained with raw data
     fits <- readRDS(paste0("./saved_objects/", mod_name, "_noSubSamp_fits_", 
-                           gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+                           gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                           ".rds"))
     sp_name <- names(sp_to_fit)[i]
+    
+    ## Get predictions to actual data
+    predictions <- lapply(fits, FUN = function(x) {
+      lapply(x[sapply(x, is.list)], FUN = function(x) {
+        preds <- tryCatch(x$preds, error = function(x) NA)
+        preds$cv <- as.character(x$block_cv_range)
+        return(preds)})})
+    predictions <- bind_rows(lapply(
+      predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+    # save results
+    try(saveRDS(predictions, 
+                paste0("./saved_objects/", "actual_predictions_", 
+                       mod_name, "_noSubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
     ## Get predictions with standardized survey effort
     mill_predictions <- lapply(fits, FUN = function(x) {
@@ -551,7 +567,8 @@ for(mod_name in mod_names) {
     try(saveRDS(mill_predictions, 
                 paste0("./saved_objects/", "standard_predictions_", 
                        mod_name, "_noSubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
     ## get variable importance (averaged over 3 folds) 
     var_imp <- lapply(fits, FUN = function(x) {
@@ -570,7 +587,8 @@ for(mod_name in mod_names) {
     try(saveRDS(var_imp, 
                 paste0("./saved_objects/", 
                        "var_importance_", mod_name, "_noSubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
     if(get_partial_dependence) {
       ## get partial dependence
@@ -607,13 +625,30 @@ for(mod_name in mod_names) {
       try(saveRDS(pd_list, 
                   paste0("./saved_objects/", 
                          "partial_dependence_", mod_name, "_noSubSamp_", 
-                         gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                         gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                         ".rds")))
     } # end get partial dependence 
     rm(fits)
     
     ######### trained with spatial subsampling #############################
     fits <- readRDS(paste0("./saved_objects/", mod_name, "_SubSamp_fits_", 
-                           gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+                           gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                           ".rds"))
+    
+    ## Get predictions to actual data
+    predictions <- lapply(fits, FUN = function(x) {
+      lapply(x[sapply(x, is.list)], FUN = function(x) {
+        preds <- tryCatch(x$preds, error = function(x) NA)
+        preds$cv <- as.character(x$block_cv_range)
+        return(preds)})})
+    predictions <- bind_rows(lapply(
+      predictions, FUN = function(x) {bind_rows(x[!is.na(x)])}))
+    # save results
+    try(saveRDS(predictions, 
+                paste0("./saved_objects/", "actual_predictions_", 
+                       mod_name, "_SubSamp_", 
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
     # Get predictions with standardized survey effort
     mill_predictions <- lapply(fits, FUN = function(x) {
@@ -627,7 +662,8 @@ for(mod_name in mod_names) {
     try(saveRDS(mill_predictions, 
                 paste0("./saved_objects/", 
                        "standard_predictions_", mod_name, "_SubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
     # get variable importance (averaged over 5 folds) 
     var_imp <- lapply(fits, FUN = function(x) {
@@ -646,9 +682,10 @@ for(mod_name in mod_names) {
     try(saveRDS(var_imp, 
                 paste0("./saved_objects/", 
                        "var_importance_", mod_name, "_SubSamp_", 
-                       gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                       gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                       ".rds")))
     
-    if(get_partial_dependence) {
+    if(get_partial_dependence & mod_name %in% mods_for_pd_plots) {
       ## get partial dependence
       # have to do this in for loops because when using lapply it seems R can't
       # interpret a variable holding the name of the variable to get plot for
@@ -683,7 +720,8 @@ for(mod_name in mod_names) {
       try(saveRDS(pd_list, 
                   paste0("./saved_objects/", 
                          "partial_dependence_", mod_name, "_SubSamp_", 
-                         gsub(" ", "_", sp_to_fit[[i]]), ".rds")))
+                         gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                         ".rds")))
     } # end get partial dependence plots
     rm(fits)
   }

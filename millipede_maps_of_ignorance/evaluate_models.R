@@ -8,7 +8,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 12 May 2020
-## last modified: 12 June 2020
+## last modified: 16 June 2020
 ##############################
 library(pROC)
 library(psych)
@@ -28,8 +28,8 @@ for(i in 1:length(test_points_ss)) {
   for(j in 1:n_subsamp_block_draws) {
     # add a column of subsampling block assignments by chosing randomly from
     # the many allocations created in "prepare_objects_for_SDM.R"
-    mill_wide_df$spat_subsamp_cell <- block_subsamp_10k[, sample(
-      2:(ncol(block_subsamp_10k)-1), size = 1)]
+    mill_wide_df$spat_subsamp_cell <- block_subsamp[, sample(
+      2:(ncol(block_subsamp)-1), size = 1)]
 
     # separate presence and absence checklists.  Keep all presence checklists.
     presences <- mill_wide_df[mill_wide_df[colnames(mill_wide_df) == 
@@ -65,14 +65,14 @@ evenness_test <- lapply(test_points_ss, FUN = function(x) {
     simpson_even(as.numeric(table(y$hectad)))
   })
 })
-## end get spatially subsampled test points ------------------------------------
-
+## end get spatially subsampled test points ----------------------------------
 
 ## evaluate models ------------------------------------------------------------
 # trained with raw data
 for(i in 1:length(sp_to_fit)) {
   fits <- readRDS(paste0("./saved_objects/", mod_name, "_noSubSamp_fits_", 
-                         gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+                         gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                         ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
   ## test against original (raw) data 
@@ -352,7 +352,7 @@ for(i in 1:length(sp_to_fit)) {
                        } else 0})
                      })))
   evals <- bind_rows(evals, ev)
-  rm(ev, block_ranges, simps_trains_hec, simps_trains_blk) # end AUC -----------
+  rm(ev, block_ranges, simps_trains_hec, simps_trains_blk) # end AUC ----------
   
   # Kappa ------------------------------------
   # get kappa for each fold
@@ -553,7 +553,8 @@ for(i in 1:length(sp_to_fit)) {
 # trained with spatial subsampling
 for(i in 1:length(sp_to_fit)) {
   fits <- readRDS(paste0("./saved_objects/", mod_name, "_SubSamp_fits_", 
-                         gsub(" ", "_", sp_to_fit[[i]]), ".rds"))
+                         gsub(" ", "_", sp_to_fit[[i]]), analysis_resolution, 
+                         ".rds"))
   sp_name <- names(sp_to_fit)[i]
   
   ## test against raw data -----------------------------------------------

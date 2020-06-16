@@ -5,7 +5,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 12 June 2020
+## last modified: 16 June 2020
 ##############################
 t_size <- 12
 
@@ -113,6 +113,39 @@ ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ],
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8)
 
+
+
+
+### plot variable importance ---------------------------------------------------
+# read in variable importance results
+vimp <- list.files("./saved_objects/")
+vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
+# average the variable importance from each CV fold
+vimp <- lapply(vimp, FUN = function(x) {
+  group_by(x, variable, cv) %>%
+    summarise(MeanDecreaseGini = mean(MeanDecreaseGini), 
+              species = unique(species), model = unique(model), 
+              train_dat = unique(train_dat))
+})
+
+vimp_plots <- lapply(vimp, FUN = function(x) {
+  dat <- x[x$cv == "random", ]
+  dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
+  ggplot(data = dat, 
+         aes(x = factor(variable, levels = dat$variable, 
+                        labels = dat$variable, ordered = T), 
+             y = MeanDecreaseGini)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() + 
+    ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
+                   dat$train_dat[1], "\n", "CV: ", dat$cv[1]))
+})
+
+# plot variable importance for all models
+for(i in 1:length(vimp_plots)) print(vimp_plots[i])
+
+
 # graph variable importance by CV strategy
 # CV strategy does not change variable importance conlcusions
 vimp_plots <- lapply(vimp, FUN = function(x) {
@@ -126,4 +159,4 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
 })
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
-
+### end plot variable importance -----------------------------------------------

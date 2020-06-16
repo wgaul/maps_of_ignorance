@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 11 May 2020
+## last modified: 16 June 2020
 ##############################
 
 ### load millipede data
@@ -74,12 +74,13 @@ soil_IFS_10km_brick <- subset(soil_IFS_10km_brick,
 soil_IFS_1km_brick <- subset(soil_IFS_1km_brick,
                               which(names(soil_IFS_1km_brick) != "Swamp"))
 
-pred_brick <- brick(list(
+pred_brick_10k <- brick(list(
   mean_tn = resample(krg_mean_tn_rast, krg_mean_rr_rast), 
   mean_tx = resample(krg_mean_tx_rast, krg_mean_rr_rast), 
   mean_rr = krg_mean_rr_rast, 
-  artificial_surfaces = resample(artificial_surfaces_l1_rast, krg_mean_rr_rast), 
-  forest_seminatural_l1 = resample(forest_seminatural_l1_rast, krg_mean_rr_rast),
+  artificial_surfaces = resample(artificial_surfaces_l1_rast, krg_mean_rr_rast),
+  forest_seminatural_l1 = resample(forest_seminatural_l1_rast, 
+                                   krg_mean_rr_rast),
   wetlands_l1 = resample(wetlands_l1_rast, krg_mean_rr_rast), 
   pasture_l2 = resample(pasture_l2_rast, krg_mean_rr_rast), 
   arable_l2 = resample(arable_land_l2_rast, krg_mean_rr_rast), 
@@ -88,9 +89,9 @@ pred_brick <- brick(list(
   soil_drainage = resample(soil_drainage_10km_brick, krg_mean_rr_rast), 
   soil_IFS = resample(soil_IFS_10km_brick, krg_mean_rr_rast)))
 # mask pred brick by one of the CORINE layers to get only Irish land cells
-# pred_brick <- mask(pred_brick, pred_brick$artificial_surfaces)
+# pred_brick_10k <- mask(pred_brick_10k, pred_brick_10k$artificial_surfaces)
 # scale and centre environmental predictors over study extent
-pred_brick <- scale(pred_brick)
+pred_brick_10k <- scale(pred_brick_10k)
 
 pred_brick_1k <- brick(list(
   mean_tn = mean_tn_rast_1k, 
@@ -107,12 +108,17 @@ pred_brick_1k <- brick(list(
   soil_IFS = soil_IFS_1km_brick))
 pred_brick_1k <- scale(pred_brick_1k)
 
+if(analysis_resolution == 10000) pred_brick <- pred_brick_10k else
+  if(analysis_resolution == 1000) pred_brick <- pred_brick_1k else
+    stop("Analysis resolution does not match any of the resolutions at which we have prepared predictor varialbes.  Analysis resolution must be either 10000 or 1000.")
+
 # make hec_names spatial 
-hec_names_spat <- SpatialPointsDataFrame(coords = hec_names[, c("eastings", "northings")], 
-                                         data = hec_names, 
-                                         proj4string = CRS("+init=epsg:29903"))
+hec_names_spat <- SpatialPointsDataFrame(
+  coords = hec_names[, c("eastings", "northings")], 
+  data = hec_names, proj4string = CRS("+init=epsg:29903"))
 # make sure millipede data is in same projection as predictor data
-hec_names_spat <- spTransform(hec_names_spat, raster::projection(pred_brick))
+hec_names_spat <- spTransform(hec_names_spat, 
+                              raster::projection(pred_brick))
 ### end prepare predictor variables -------------------------------------------
 
 ### prepare millipede data ----------------------------------------------------
