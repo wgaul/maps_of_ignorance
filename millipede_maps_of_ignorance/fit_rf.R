@@ -131,18 +131,21 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
             type = "prob")[, "1"]}, 
     error = function(x) NA)
   
-  # label test folds in case this is ever needed later
-  if("folds" %in% colnames(newdata)) {
-    newdata$test_fold <- tryCatch(newdata$folds == test_fold, 
-                                  error = function(x) NA)
-  } else {
-    newdata$folds <- NA
-    newdata$test_fold <- NA}
-  
   # drop predictor variables from predictions dataframe 
-  newdata <- select(newdata, hectad, eastings, northings, cells,
-                    list_length, day_of_year, cos_doy, sin_doy, 
-                    folds, test_fold, pred)
+  if(analysis_resolution == 10000) {
+    newdata <- select(newdata, hectad, eastings, northings, 
+                      day_of_year, pred)
+  } else if(analysis_resolution == 1000) {
+    newdata <- select(newdata, eastings, northings, day_of_year, pred)
+    newdata$en <- paste0(round(newdata$eastings), "_", 
+                         round(newdata$northings))
+    # summarise standardized predictions over the entire year
+    newdata <- group_by(newdata, en) %>%
+      summarise(mean_pred = mean(pred), eastings = mean(eastings), 
+                northings = mean(northings))
+  } else stop("Analysis resolution must be either 10000 or 1000")
+
+
   
   ## calculate class balance (proportion of checklists with a detection)
   prop_dets <- tryCatch({
@@ -154,15 +157,17 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
   # Only calculate this for fold # 1.  The same dataset is used in multiple 
   # folds, so the value will be identical for all folds using that dataset.
   if(test_fold == 1) {
-    # calculate at hectad scale
-    # calculate number of checklists per hectad
-    table_nobs <- data.frame(table(sp_df$hectad))
-    colnames(table_nobs) <- c("hectad", "nrec")
-    # get all hectads (use newdata df to get names of all hectads)
-    all_hectads <- newdata[newdata$day_of_year == newdata$day_of_year[1], ]
-    all_hectads <- left_join(all_hectads, table_nobs, by = "hectad")
-    all_hectads$nrec[is.na(all_hectads$nrec)] <- 0
-    simps_train_hec <- simpson_even(as.numeric(all_hectads$nrec))
+    if(analysis_resolution == 10000){
+      # calculate at hectad scale
+      # calculate number of checklists per hectad
+      table_nobs <- data.frame(table(sp_df$hectad))
+      colnames(table_nobs) <- c("hectad", "nrec")
+      # get all hectads (use newdata df to get names of all hectads)
+      all_hectads <- newdata[newdata$day_of_year == newdata$day_of_year[1], ]
+      all_hectads <- left_join(all_hectads, table_nobs, by = "hectad")
+      all_hectads$nrec[is.na(all_hectads$nrec)] <- 0
+      simps_train_hec <- simpson_even(as.numeric(all_hectads$nrec))
+    } else simps_train_hec <- NA
    
     ## calculate at spatial subsampling block scale (e.g. 30k X 30km)
     lst_spat <- SpatialPointsDataFrame(
@@ -178,7 +183,7 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
                          rasterLayer = pred_brick$pasture_l2, 
                          biomod2Format = FALSE)
     # add spatial subsampling grid cell ID to each hectad
-    all_hectads <- newdata[newdata$day_of_year == newdata$day_of_year[1], ]
+    all_hectads <- hec_names
     all_hectads <- SpatialPointsDataFrame(
       coords = all_hectads[, c("eastings", "northings")], 
       data = all_hectads, proj4string = CRS("+init=epsg:29903"))
@@ -224,7 +229,8 @@ fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata,
 
 call_fit_rf <- function(fold_assignments, sp_name, test_fold, sp_df, 
                         pred_names, spatial.under.sample, block_subsamp, mtry, 
-                        pred_brick, block_range_spat_undersamp, ...) {
+                        pred_brick, block_range_spat_undersamp, 
+                        newdata, ...) {
   # Function to call fit_rf on each species in a list of species dfs
   # First spatially sub-sample non-detection records to even absence records
   # and improve class balance (presuming sp. is rare)  
@@ -324,7 +330,7 @@ for(i in 1:length(sp_to_fit)) {
                    "list_length"), #"day_of_year"
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = FALSE, 
     mtry = 1, 
     mc.cores = n_cores)
@@ -348,7 +354,7 @@ for(i in 1:length(sp_to_fit)) {
                    "list_length"), #"day_of_year",
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = TRUE, 
     mtry = 1,
     mc.cores = n_cores)
@@ -374,7 +380,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = FALSE, 
     mtry = 2, 
     mc.cores = n_cores)
@@ -398,7 +404,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = TRUE, 
     mtry = 2, 
     mc.cores = n_cores)
@@ -430,7 +436,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = FALSE, 
     mtry = 3, 
     mc.cores = n_cores)
@@ -458,7 +464,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = TRUE, 
     mtry = 3, 
     mc.cores = n_cores)
@@ -488,7 +494,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = FALSE, 
     mtry = 4, 
     mc.cores = n_cores)
@@ -517,7 +523,7 @@ for(i in 1:length(sp_to_fit)) {
                    "sin_doy", "cos_doy", "list_length"),
     block_subsamp = block_subsamp, 
     block_range_spat_undersamp = block_range_spat_undersamp, 
-    pred_brick = pred_brick,
+    pred_brick = pred_brick, newdata = newdata,
     spatial.under.sample = TRUE, 
     mtry = 4, 
     mc.cores = n_cores)

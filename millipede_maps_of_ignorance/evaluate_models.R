@@ -277,7 +277,7 @@ for(i in 1:length(sp_to_fit)) {
   aucs <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
     auc_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                                size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -359,7 +359,7 @@ for(i in 1:length(sp_to_fit)) {
   kp <- lapply(fits, function(x, sp_name, kappas, test_points_ss) {
     kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -405,7 +405,7 @@ for(i in 1:length(sp_to_fit)) {
   sens <- mapply(FUN = function(x, thresh, sp_name, test_points_ss) {
     sens_iter <- mapply(FUN = function(y, thresh, sp_name, test_points_ss) {
       # select test dataset to use for this test 
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -455,7 +455,7 @@ for(i in 1:length(sp_to_fit)) {
   specif <- mapply(FUN = function(x, thresh, sp_name, test_points_ss) {
     specif_iter <- mapply(FUN = function(y, thresh, sp_name, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -504,7 +504,7 @@ for(i in 1:length(sp_to_fit)) {
     br_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
       tryCatch({
         # select test dataset to use for this test
-        test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+        test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                             size = 1)]]
         # subset to spatially  subsampled test data points that are in the test 
         # fold for this model
@@ -730,7 +730,7 @@ for(i in 1:length(sp_to_fit)) {
   aucs <- lapply(fits, FUN = function(x, sp_name, test_points_ss) {
     auc_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -812,7 +812,7 @@ for(i in 1:length(sp_to_fit)) {
   kp <- lapply(fits, function(x, sp_name, kappas, test_points_ss) {
     kp_iter <- lapply(x, FUN = function(y, sp_name, kappas, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -858,7 +858,7 @@ for(i in 1:length(sp_to_fit)) {
   sens <- mapply(FUN = function(x, thresh, sp_name, test_points_ss) {
     sens_iter <- mapply(FUN = function(y, thresh, sp_name, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -906,7 +906,7 @@ for(i in 1:length(sp_to_fit)) {
   specif <- mapply(FUN = function(x, thresh, sp_name, test_points_ss) {
     specif_iter <- mapply(FUN = function(y, thresh, sp_name, test_points_ss) {
       # select test dataset to use for this test
-      test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+      test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                           size = 1)]]
       # subset to spatially  subsampled test data points that are in the test 
       # fold for this model
@@ -955,7 +955,7 @@ for(i in 1:length(sp_to_fit)) {
     br_iter <- lapply(x, FUN = function(y, sp_name, test_points_ss) {
       tryCatch({
         # select test dataset to use for this test
-        test_data <- test_points_ss[[sample(1:length(test_points_ss[[i]]), 
+        test_data <- test_points_ss[[sample(1:length(test_points_ss), 
                                             size = 1)]]
         # subset to spatially  subsampled test data points that are in the test 
         # fold for this model

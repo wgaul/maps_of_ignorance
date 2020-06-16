@@ -55,7 +55,7 @@ ggplot(data = evals[evals$metric == "AUC" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("AUC\n(Cross-Validated)") + 
-  ggtitle("Random CV") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -82,7 +82,7 @@ ggplot(data = evals[evals$metric == "Kappa" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Kappa\n(Cross-Validated)") + 
-  ggtitle("Random CV") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -110,7 +110,7 @@ ggplot(data = evals[evals$metric == "sensitivity" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Sensitivity\n(Cross-Validated)") + 
-  ggtitle("Random CV") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -139,7 +139,7 @@ ggplot(data = evals[evals$metric == "specificity" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Specificity\n(block Cross-Validated)") + 
-  ggtitle("Random CV") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -167,7 +167,7 @@ ggplot(data = evals[evals$metric == "Brier" &
     labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
   xlab("Training Data") + 
   ylab("Brier score\n(Cross-Validated)") + 
-  ggtitle("Random CV") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -180,6 +180,7 @@ ggplot(data = evals[evals$metric == "Brier" &
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- vimp[grepl(paste0(".*", analysis_resolution), vimp)]
 vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
 vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the variable importance from each CV fold
@@ -200,7 +201,8 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
     geom_bar(stat = "identity") + 
     coord_flip() + 
     ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
-                   dat$train_dat[1], "\n", "CV: ", dat$cv[1]))
+                   dat$train_dat[1], "\n", "CV: ", dat$cv[1], 
+                   " analysis resolution: ", analysis_resolution))
 })
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
@@ -211,6 +213,7 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
+pd <- pd[grepl(paste0(".*", analysis_resolution), pd)]
 pd <- pd[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), pd)]
 names(pd) <- pd
 pd <- lapply(pd, function(x) readRDS(paste0("./saved_objects/", x)))
@@ -231,7 +234,8 @@ pd_plots <- lapply(pd, FUN = function(x) {
     geom_line() + 
     facet_wrap(~variable, scales = "free_x") +
     ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
-                   dat$train_data[1], "\n", "CV: ", dat$cv[1]))
+                   dat$train_data[1], "\n", "CV: ", dat$cv[1], 
+                   "\nanalysis resolution: ", analysis_resolution))
 })
 
 for(i in 1:length(pd_plots)) print(pd_plots[i])
@@ -240,6 +244,7 @@ for(i in 1:length(pd_plots)) print(pd_plots[i])
 # load standardized predictions
 stpred <- list.files("./saved_objects/")
 stpred <- stpred[grepl("standard_pre.*", stpred)]
+stpred <- stpred[grepl(paste0(".*", analysis_resolution), stpred)]
 stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), 
                        stpred)]
 names(stpred) <- gsub("standard.*tions_", "", stpred)

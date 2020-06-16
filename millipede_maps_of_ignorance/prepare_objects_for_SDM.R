@@ -117,25 +117,43 @@ if(make_spatial_blocks) {
 ### end make spatial blocks ---------------------------------------------------
 
 # make new data with standardized recording effort
-newdata_temp <- cbind(hec_names,  
-                      data.frame(raster::extract(pred_brick, hec_names_spat, 
-                                                 df = TRUE, 
-                                                 method = "simple", 
-                                                 cellnumbers = TRUE)))
+if(analysis_resolution == 10000) {
+  newdata_temp <- cbind(hec_names,  
+                        data.frame(raster::extract(pred_brick, hec_names_spat, 
+                                                   df = TRUE, 
+                                                   method = "simple", 
+                                                   cellnumbers = TRUE)))
+} else
+  if(analysis_resolution == 1000) {
+    # Load Ireland coastline
+    ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+    ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
+    
+    newdata_temp <- as.data.frame(mask(pred_brick, ir_TM75))
+    newdata_temp <- cbind(newdata_temp, 
+                          data.frame(coordinates(mask(pred_brick, ir_TM75))))
+    newdata_temp <- newdata_temp[complete.cases(newdata_temp), ]
+    colnames(newdata_temp)[colnames(newdata_temp) == "x"] <- "eastings"
+    colnames(newdata_temp)[colnames(newdata_temp) == "y"] <- "northings"
+    rm(ir, ir_TM75)
+  } else stop("Analysis resolution must be either 10000 or 1000 in order to created 'newdata' for predictions.")
+
 newdata <- data.frame()
-for(i in 1:36) { # get predictions for every 10 days throught year
+for(i in 1:18) { # get predictions for every 20 days throught year
   dt <- newdata_temp
-  dt$day_of_year <- i*10
+  dt$day_of_year <- i*20
   newdata <- bind_rows(newdata, dt)
 }
 newdata$sin_doy <- sin((2*pi*newdata$day_of_year) / 365)
 newdata$cos_doy <- cos((2*pi*newdata$day_of_year) / 365)
-newdata$list_length <- 4
+newdata$list_length <- 2 # median list length: median(mill_wide_df$list_length)
 
 newdata <- SpatialPointsDataFrame(
   coords = newdata[, c("eastings", "northings")], 
   data = newdata, 
   proj4string = CRS("+init=epsg:29903"))
+
+rm(newdata_temp)
 ### save objects for use on sonic ---------------------------------------------
 saveRDS(mill_wide, "mill_wide.rds")
 if(make_spatial_blocks) {
