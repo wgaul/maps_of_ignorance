@@ -37,15 +37,18 @@ mill_wide <- mill_fewer_vars %>%
                                               "EndDate",
                                               "SiteName", "GridReference", 
                                               "Latitude", "Longitude", 
-                                              "Precision", 
-                                              "Genus_species", 
-                                              "Precision")], 
+                                              "Genus_species")], 
             by = "checklist_ID") %>%
   unique()
 
 mill_wide <- SpatialPointsDataFrame(
   coords = mill_wide[, c("eastings", "northings")], 
   data = mill_wide, proj4string = CRS("+init=epsg:29903"))
+
+if(analysis_resolution == 1000) {
+  # get only checklists with spatial resolution of 1km or less
+  mill_wide <- mill_wide[mill_wide$Precision <= 1000, ]
+}
 
 if(make_spatial_blocks) {
   ### Make spatial block CV folds -------------------------------------------

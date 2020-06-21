@@ -3,7 +3,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 16 June 2020
+## last modified: 19 June 2020
 ##############################
 
 ### load millipede data
@@ -16,11 +16,15 @@ hec_names <- read_csv("./data/Irish_land_hectads.csv")
 # hec_names$eastings = hec_names$eastings - 4900 
 # hec_names$northings = hec_names$northings - 4900
 
-# combine test and training data for all groups
+# combine test and training data
 test_data <- test_data$millipede
 training_data <- training_data$millipede
 mill <- bind_rows(test_data, training_data)
 rm(test_data, training_data)
+
+# Load Ireland coastline
+ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 
 ### prepare and load environmental data ---------------------------------------
 if(!all(file.exists("annual_precip_hectad.rds") & 
@@ -35,8 +39,6 @@ if(!all(file.exists("annual_precip_hectad.rds") &
         file.exists("corine_label_1_1km.RData") & 
         file.exists("corine_label_2_hectad.RData") & 
         file.exists("corine_label_2_1km.RData") &
-        file.exists("coast_dist_hec.RData") & 
-        file.exists("coast_dist_1km.RData") & 
         file.exists("soil_IFS_10km_brick.rds") & 
         file.exists("soil_IFS_1km_brick.rds") & 
         file.exists("soil_drainage_10km_brick.rds") & 
@@ -46,7 +48,6 @@ if(!all(file.exists("annual_precip_hectad.rds") &
   source("./eobs_min_winter_temp_hec.R")
   source("./interp_elev_hec_etopo1.R")
   source("./prep_corine.R")
-  source("./distance_to_coast_calc.R")
   source("./soil_SIS_prep.R")
 }
 load("annual_precip_hectad.RData")
@@ -61,8 +62,6 @@ load("corine_label_1_hectad.RData")
 load("corine_label_1_1km.RData")
 load("corine_label_2_hectad.RData")
 load("corine_label_2_1km.RData")
-load("coast_dist_hec.RData")
-load("coast_dist_1km.RData")
 soil_drainage_10km_brick <- read_rds("soil_drainage_10km_brick.rds")
 soil_drainage_1km_brick <- read_rds("soil_drainage_1km_brick.rds")
 soil_IFS_10km_brick <- read_rds("soil_IFS_10km_brick.rds")
@@ -84,14 +83,13 @@ pred_brick_10k <- brick(list(
   wetlands_l1 = resample(wetlands_l1_rast, krg_mean_rr_rast), 
   pasture_l2 = resample(pasture_l2_rast, krg_mean_rr_rast), 
   arable_l2 = resample(arable_land_l2_rast, krg_mean_rr_rast), 
-  coast_dist = resample(coast_dist_hec_rast, krg_mean_rr_rast), 
   elev = resample(elev, krg_mean_rr_rast), 
   soil_drainage = resample(soil_drainage_10km_brick, krg_mean_rr_rast), 
   soil_IFS = resample(soil_IFS_10km_brick, krg_mean_rr_rast)))
 # mask pred brick by one of the CORINE layers to get only Irish land cells
 # pred_brick_10k <- mask(pred_brick_10k, pred_brick_10k$artificial_surfaces)
-# scale and centre environmental predictors over study extent
-pred_brick_10k <- scale(pred_brick_10k)
+# # scale and centre environmental predictors over study extent
+# pred_brick_10k <- scale(pred_brick_10k)
 
 pred_brick_1k <- brick(list(
   mean_tn = mean_tn_rast_1k, 
@@ -102,11 +100,10 @@ pred_brick_1k <- brick(list(
   wetlands_l1 = wetlands_l1_rast_1km, 
   pasture_l2 = pasture_l2_rast_1km,
   arable_l2 = arable_land_l2_rast_1km,
-  # coast_dist = coast_dist_1km_rast, 
-  elev = elev_1k, 
-  soil_drainage = soil_drainage_1km_brick,
-  soil_IFS = soil_IFS_1km_brick))
-pred_brick_1k <- scale(pred_brick_1k)
+  elev = elev_1k)) #soil_drainage = soil_drainage_1km_brick,soil_IFS = soil_IFS_1km_brick
+# pred_brick_1k <- mask(pred_brick_1k, ir_TM75) 
+# pred_brick_1k <- scale(pred_brick_1k) # shouldn't matter for RF
+rm(ir_TM75, ir)
 
 if(analysis_resolution == 10000) pred_brick <- pred_brick_10k else
   if(analysis_resolution == 1000) pred_brick <- pred_brick_1k else

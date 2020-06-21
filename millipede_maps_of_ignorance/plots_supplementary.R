@@ -12,7 +12,7 @@ t_size <- 12
 library(GGally)
 
 ## predictor variable correlations ------------------------------------------
-predictors_df <- data.frame(newdata[newdata$day_of_year == 10, ])
+predictors_df <- data.frame(newdata[newdata$day_of_year == 20, ])
 predictors_df <- predictors_df[, colnames(predictors_df) %in% 
                                 c("hectad", "mean_tn", "mean_tx", 
                                   "mean_rr", "artificial_surfaces", 

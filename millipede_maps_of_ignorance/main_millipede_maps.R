@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 16 June 2020
+## last modified: 19 June 2020
 #################################
 warning("TODO: 21 May 2020: Re-set the number of spatial undersamplingn block configurations to make to a higher number (e.g. 2000 or something much more than the number of models to test and fit).")
 
@@ -20,15 +20,14 @@ seed <- 23012020  # 23 Jan 2020
 set.seed(seed) 
 
 run_rf <- T
-make_sampling_plots <- F # map sampling coverage in env. and geographic space
-make_spatial_blocks <- T # takes a few minutes. Set to T for final run
+make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 get_partial_dependence <- T # calculate partial dependence (time consuming)
 
 analysis_resolution <- 1000 # analysis resolution (10000 or 1000 m rid squares)
 n_folds <- 3 # number of cross-validation folds to use
-n_cv_trials <- 3 # number of different cross-validation fold layouts to use
+n_cv_trials <- 33 # number of different cross-validation fold layouts to use
 cv_block_sizes <- c("random", 30000) # sizes of CV spatial blocks (in meters)
-n_subsamp_block_draws <- 10 # number of spatial subsampling block configurations to make
+n_subsamp_block_draws <- 3000 # number of spatial subsampling block configurations to make
 block_range_spat_undersamp <- 30000 # spatial undersampling grid block size (m)
 
 library(wgutil)
@@ -53,21 +52,36 @@ source("functions_maps_of_ignorance.R")
 
 n_cores <- 1
 
-sp_to_fit <- list("Ommatoiulus sabulosus")
-
-# sp_to_fit <- list("Julus scandinavius", "Tachypodoiulus niger",
-#                   "Ommatoiulus sabulosus", "Cylindroiulus punctatus",
-#                   "Boreoiulus tenuis", "Proteroiulus fuscus",
-#                   "Blaniulus guttulatus", "Cylindroiulus latestriatus",
-#                   "Proteroiulus fuscus", "Ophiodesmus albonanus",
-#                   "Glomeris marginata", "Macrosternodesmus palicola")
-#  
+# select species to fit models to
+sp_to_fit <- list("Boreoiulus tenuis", "Ommatoiulus sabulosus")
+# "Macrosternodesmus palicola"
 names(sp_to_fit) <- sp_to_fit
+
+# define environmental predictors for each species
+sp_predictors <- list(
+  "Macrosternodesmus palicola" = c("mean_rr", "artificial_surfaces", 
+                                   "arable_l2"),
+  "Boreoiulus tenuis" = c("mean_rr", "elev", "arable_l2", 
+                          "artificial_surfaces"),
+  "Ommatoiulus sabulosus" = c("mean_rr", "elev", "artificial_surfaces", 
+                              "wetlands_l1"), 
+  "Blaniulus guttulatus" = c("mean_tn", "mean_rr", "elev", 
+                             "artificial_surfaces", "arable_l2", 
+                             "forest_seminatural_l1"),
+  "Cylindroiulus latestriatus" = c("mean_tn", "mean_rr", "elev", 
+                                   "artificial_surfaces", "arable_l2", 
+                                   "pasture_l2", "forest_seminatural_l1"),
+  "Glomeris marginata" = c("mean_tn", "mean_rr", "elev", "artificial_surfaces", 
+                           "arable_l2", "forest_seminatural_l1"), 
+  "Cylindroiulus punctatus" = c("mean_tn", "mean_rr", "elev", 
+                                "artificial_surfaces", "arable_l2", 
+                                "pasture_l2", "forest_seminatural_l1"))
 
 source("prepare_data.R")
 source("prepare_objects_for_SDM.R")
-mod_names <- c("day_ll_rf", "spat_ll_rf", "env_ll_rf", "env_spat_ll_rf") # 
-mods_for_pd_plots <- c("spat_ll_rf", "env_spat_ll_rf")
+# mod_names <- c("env_spat_ll_rf")
+mod_names <- c("day_ll_rf", "spat_ll_rf", "env_ll_rf", "env_spat_ll_rf")
+mods_for_pd_plots <- c("env_spat_ll_rf")
 
 if(run_rf) source("fit_rf.R")
 
@@ -85,6 +99,24 @@ for(mod_name in mod_names) {
 source("plots_main.R")
 source("plots_supplementary.R")
 
+
+## print numbers for manuscript ------------------------------------------------
+summary(mill$year) # years
+nrow(mill)
+table(mill$Precision)
+# number of checklists with 1 km resolution or better
+length(unique(mill$checklist_ID[mill$Precision <= 1000]))
+
+#*#*# not used right now
+# number of checklists with 10 km resolution or better
+length(unique(mill$checklist_ID[mill$Precision <= 10000])) 
+
+
+## end print numbers for manuscript -------------------------------------------
+
+
+
+make_sampling_plots <- F # map sampling coverage in env. and geographic space
 if(make_sampling_plots) source("sampling_coverage_maps.R")
 
 

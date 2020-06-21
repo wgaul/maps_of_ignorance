@@ -180,7 +180,7 @@ ggplot(data = evals[evals$metric == "Brier" &
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
-vimp <- vimp[grepl(paste0(".*", analysis_resolution), vimp)]
+vimp <- vimp[grepl(paste0(".*", analysis_resolution, ".rds"), vimp)]
 vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
 vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the variable importance from each CV fold
@@ -213,7 +213,7 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
-pd <- pd[grepl(paste0(".*", analysis_resolution), pd)]
+pd <- pd[grepl(paste0(".*", analysis_resolution, ".rds"), pd)]
 pd <- pd[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), pd)]
 names(pd) <- pd
 pd <- lapply(pd, function(x) readRDS(paste0("./saved_objects/", x)))
@@ -239,56 +239,36 @@ pd_plots <- lapply(pd, FUN = function(x) {
 })
 
 for(i in 1:length(pd_plots)) print(pd_plots[i])
+### end plot partial dependence ------------------------------------------------
 
-# see effect of DOY by looking at standardized predictions
+
+### plot predictions with standardized list length ----------------------------
 # load standardized predictions
 stpred <- list.files("./saved_objects/")
 stpred <- stpred[grepl("standard_pre.*", stpred)]
-stpred <- stpred[grepl(paste0(".*", analysis_resolution), stpred)]
+stpred <- stpred[grepl(paste0(".*", analysis_resolution, ".rds"), stpred)]
 stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), 
                        stpred)]
 names(stpred) <- gsub("standard.*tions_", "", stpred)
 names(stpred) <- gsub(".rds", "", names(stpred))
 stpred <- lapply(stpred, 
                  FUN = function(x) readRDS(paste0("./saved_objects/", x)))
-# average predictions for each day of year (taking average over all locations)
-doy_plots <- lapply(stpred, FUN = function(x) {
-  # keep only random CV predictions
-  dat <- x[x$cv == "random", ]
-  dat <- group_by(dat, day_of_year) %>%
-    summarise(pred = mean(pred, na.rm = T), cos_doy = mean(cos_doy), 
-                          sin_doy = mean(sin_doy))
-  # # make sure 1st and last days of year are close to each other
-  # ggplot(data = dat, aes(x = cos_doy, y = sin_doy, color = day_of_year, 
-  #                        size = pred)) + geom_point()
-  
-  ggplot(data = dat, aes(x = day_of_year, y = pred)) + 
-    geom_point() + geom_line() + 
-    theme_bw()
-})
 
-doy_plots <- mapply(FUN = function(x, nm) {x + ggtitle(nm)}, 
-                    doy_plots, names(doy_plots), SIMPLIFY = FALSE)
-
-for(i in 1:length(doy_plots)) print(doy_plots[i])
-
-### end plot partial dependence ------------------------------------------------
-
-
-### plot predictions with standardized list length ----------------------------
 # plot average of predictions from all 5 folds (so 4 predictions will be to
 # training data, one prediction to test data in each grid cell)
 prediction_plots <- mapply(FUN = function(x, nm, mill) {
   # map only predictions from random CV
-  dat <- x[x$cv == "random", ]
-  sp <- gsub(".*Samp_", "", nm)
+  dat <- x[x$cv == "random", ] # use only random CV results
+  sp <- gsub(".*Samp_", "", nm) # get species name
+  sp <- gsub("1000.*", "", sp)
   sp <- gsub("_", " ", sp)
-  mod <- gsub("_SubSamp.*|_noSub.*", "", nm)
-  train_data <- gsub("^.*_rf_", "", nm)
+  mod <- gsub("_SubSamp.*|_noSub.*", "", nm) # get model name
+  train_data <- gsub("^.*_rf_", "", nm) # get training data type name
   train_data <- gsub("_.*_.*$", "", train_data)
   
-  dat <- group_by(dat, hectad) %>%
-    summarise(mean_prediction = mean(pred, na.rm = T), 
+  # get average predictions for each grid cell (averaging over all folds)
+  dat <- group_by(dat, en) %>%
+    summarise(mean_prediction = mean(mean_pred, na.rm = T), 
               eastings = mean(eastings), northings = mean(northings))
   ggplot() + 
     geom_tile(data = dat, 
@@ -297,21 +277,32 @@ prediction_plots <- mapply(FUN = function(x, nm, mill) {
                color = "light grey", size = 0.5) +
     geom_point(data = mill[mill$Genus_species == sp, ],
                aes(x = eastings, y = northings), color = "orange") +
-    ggtitle(paste0(sp, "\n", mod, " trained with ", train_data))
+    ggtitle(paste0(sp, "\n", mod, " trained with ", train_data)) + 
+    theme_bw()
 }, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
 
 for(i in 1:length(prediction_plots)) print(prediction_plots[i])
 ### end plot standardized predictions -----------------------------------------
 
 
-
 ### save figures and tables ---------------------------------------------------
-n_detections_per_species <- data.frame(table(mill$Genus_species))
-n_detections_per_species <- n_detections_per_species[order(
-  n_detections_per_species$Freq, decreasing = FALSE), ]
-colnames(n_detections_per_species) <- c("species", "number_of_detections")
-n_detections_per_species <- n_detections_per_species[
-  n_detections_per_species$species %in% sp_to_fit, ]
-n_detections_per_species
+# Number of detections per species when using 10km resolution
+n_detections_per_species_10km <- data.frame(table(mill$Genus_species))
+n_detections_per_species_10km <- n_detections_per_species_10km[order(
+  n_detections_per_species_10km$Freq, decreasing = FALSE), ]
+colnames(n_detections_per_species_10km) <- c("species", "number_of_detections")
+n_detections_per_species_10km <- n_detections_per_species_10km[
+  n_detections_per_species_10km$species %in% sp_to_fit, ]
+n_detections_per_species_10km
+
+# Number of detections per species when using 1 km resolution
+n_detections_per_species_1km <- data.frame(
+  table(mill$Genus_species[mill$Precision <= 1000]))
+n_detections_per_species_1km <- n_detections_per_species_1km[order(
+  n_detections_per_species_1km$Freq, decreasing = FALSE), ]
+colnames(n_detections_per_species_1km) <- c("species", "number_of_detections")
+n_detections_per_species_1km <- n_detections_per_species_1km[
+  n_detections_per_species_1km$species %in% sp_to_fit, ]
+n_detections_per_species_1km
 
 ### end save figures and tables -----------------------------------------------
