@@ -25,16 +25,36 @@ ggpairs(data = predictors_df, columns = 2:ncol(predictors_df),
         title = "Predictor variable values\nfor all hectads")
 
 ggpairs(data = mill, columns = which(colnames(mill) %in% 
-                                       c("mean_tn", "mean_tx", 
+                                       c("mean_tn", 
                                          "mean_rr", "artificial_surfaces", 
                                          "forest_seminatural_l1", 
                                          "wetlands_l1", "pasture_l2", 
                                          "arable_l2", "elev", 
                                          "eastings", "northings", 
-                                         "sin_doy", "cos_doy", 
+                                         "sin_doy", "cos_doy", "day_of_year",
                                          "list_length")), 
         title = "Predictor variable values\non millipede checklists")
 ## end predictor variable correlatins --------------------------------------
+
+## checklist length plots -----------------------------------------------------
+hist(mill_wide$list_length, breaks = 15)
+# calculated median and mean list length in each hectad
+ll_df <- group_by(data.frame(mill_wide), hectad) %>%
+  summarise(median_ll = median(list_length),
+            mean_ll = mean(list_length), 
+            n_lists = n()) %>% 
+  left_join(., hec_names)
+
+ggplot(data = ll_df, aes(x = eastings, y = northings, fill = median_ll)) + 
+  geom_tile() + 
+  scale_fill_continuous(name = "Median\nchecklist\nlength") + 
+  theme_bw()
+
+# ggplot(data = ll_df, aes(x = eastings, y = northings, fill = n_lists)) + 
+#   geom_tile() + 
+#   scale_fill_continuous(name = "Number\nof\nchecklists") + 
+#   theme_bw()
+## end checklist length plots -------------------------------------------------
 
 
 ## plot results using random CV -----------------------------------------------
@@ -160,3 +180,5 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 ### end plot variable importance -----------------------------------------------
+
+

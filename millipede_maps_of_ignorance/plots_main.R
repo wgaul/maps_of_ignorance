@@ -286,6 +286,26 @@ for(i in 1:length(prediction_plots)) print(prediction_plots[i])
 
 
 ### save figures and tables ---------------------------------------------------
+# Number of repeat visits to grid cells (though there could be multiple 
+# locations visited within a grid cell, so these are not necessarily true 
+# repeat visits)
+repeat_visits <- data.frame(
+  en = paste0(mill_wide$eastings, "_", mill_wide$northings), 
+  year = mill_wide$year)
+table(repeat_visits$en)[order(table(repeat_visits$en), decreasing = T)]
+table(as.numeric(table(repeat_visits$en, repeat_visits$year)))
+# # look at most re-visited grid cell
+# data.frame(mill_wide[mill_wide$eastings == 316499 & 
+#                        mill_wide$northings == 237500, ]) 
+
+# number of checklists
+nrow(mill_wide)
+
+# proportion of lists with list lenght of 1
+length(which(mill_wide$list_length == 1)) / nrow(mill_wide)
+# proportion of lists with list lenght of 1
+length(which(mill_wide$list_length == 2)) / nrow(mill_wide)
+
 # Number of detections per species when using 10km resolution
 n_detections_per_species_10km <- data.frame(table(mill$Genus_species))
 n_detections_per_species_10km <- n_detections_per_species_10km[order(
