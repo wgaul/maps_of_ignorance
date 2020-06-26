@@ -11,7 +11,11 @@
 ## created: 13 May 2020
 ## last modified: 16 June 2020
 ##############################
+try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
+       mill_spat))
 t_size <- 12
+
+evals <- read.csv("./saved_objects/evals.csv")
 
 # spatial evenness of training and test datasets
 ggplot(data = evals[!is.na(evals$simpson_training_hectad), ], 
@@ -176,7 +180,7 @@ ggplot(data = evals[evals$metric == "Brier" &
 
 
 
-### plot variable importance only for models of interest -----------------------
+### plot variable importance only for models of interest ----------------------
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
@@ -191,8 +195,10 @@ vimp <- lapply(vimp, FUN = function(x) {
               train_dat = unique(train_dat))
 })
 
-vimp_plots <- lapply(vimp, FUN = function(x) {
-  dat <- x[x$cv == "random", ]
+vimp <- bind_rows(vimp)
+
+vimp_plots <- lapply(sp_to_fit, FUN = function(x, v_df) {
+  dat <- v_df[v_df$cv == "random" & v_df$species == x, ]
   dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
   ggplot(data = dat, 
          aes(x = factor(variable, levels = dat$variable, 
@@ -202,14 +208,15 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
     coord_flip() + 
     ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
                    dat$train_dat[1], "\n", "CV: ", dat$cv[1], 
-                   " analysis resolution: ", analysis_resolution))
-})
+                   " analysis resolution: ", analysis_resolution)) + 
+    facet_wrap(~factor(train_dat), scales = "free")
+}, v_df = vimp)
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
-### end plot variable importance -----------------------------------------------
+### end plot variable importance ---------------------------------------------
 
 
-### plot partial dependence ---------------------------------------------------
+### plot partial dependence --------------------------------------------------
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
@@ -239,7 +246,8 @@ pd_plots <- lapply(pd, FUN = function(x) {
 })
 
 for(i in 1:length(pd_plots)) print(pd_plots[i])
-### end plot partial dependence ------------------------------------------------
+rm(pd)
+### end plot partial dependence -----------------------------------------------
 
 
 ### plot predictions with standardized list length ----------------------------
@@ -251,14 +259,15 @@ stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"),
                        stpred)]
 names(stpred) <- gsub("standard.*tions_", "", stpred)
 names(stpred) <- gsub(".rds", "", names(stpred))
-stpred <- lapply(stpred, 
-                 FUN = function(x) readRDS(paste0("./saved_objects/", x)))
+# stpred <- lapply(stpred, 
+#                  FUN = function(x) readRDS(paste0("./saved_objects/", x)))
 
 # plot average of predictions from all 5 folds (so 4 predictions will be to
 # training data, one prediction to test data in each grid cell)
 prediction_plots <- mapply(FUN = function(x, nm, mill) {
+  dat <- readRDS(paste0("./saved_objects/", x)) # load object
   # map only predictions from random CV
-  dat <- x[x$cv == "random", ] # use only random CV results
+  dat <- dat[dat$cv == "random", ] # use only random CV results
   sp <- gsub(".*Samp_", "", nm) # get species name
   sp <- gsub("1000.*", "", sp)
   sp <- gsub("_", " ", sp)

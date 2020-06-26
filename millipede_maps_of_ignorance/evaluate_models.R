@@ -1001,3 +1001,7 @@ for(i in 1:length(sp_to_fit)) {
   rm(fits)
 }
 ### end evaluation ---------------------------------------------------
+
+write_csv(evals, "./saved_objects/evals.csv")
+
+rm(test_points_ss)

@@ -766,6 +766,6 @@ for(mod_name in mod_names) {
   }
 }
 
-
+print(Sys.time())
 
 if(on_sonic) quit(save = "no")

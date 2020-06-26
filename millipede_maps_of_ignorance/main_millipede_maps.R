@@ -11,13 +11,12 @@
 ## created: 25 Oct 2019
 ## last modified: 19 June 2020
 #################################
-warning("TODO: 21 May 2020: Re-set the number of spatial undersamplingn block configurations to make to a higher number (e.g. 2000 or something much more than the number of models to test and fit).")
 
 rm(list = ls())
 dbg <- F
 calc_1k_distances <- F # run distances for 1km grid (might take a long time)
 seed <- 23012020  # 23 Jan 2020
-set.seed(seed) 
+
 
 run_rf <- T
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
@@ -26,9 +25,11 @@ get_partial_dependence <- T # calculate partial dependence (time consuming)
 analysis_resolution <- 1000 # analysis resolution (10000 or 1000 m rid squares)
 n_folds <- 3 # number of cross-validation folds to use
 n_cv_trials <- 33 # number of different cross-validation fold layouts to use
-cv_block_sizes <- c("random", 30000) # sizes of CV spatial blocks (in meters)
+cv_block_sizes <- c("random") # sizes of CV spatial blocks (in meters) , 30000
 n_subsamp_block_draws <- 3000 # number of spatial subsampling block configurations to make
 block_range_spat_undersamp <- 30000 # spatial undersampling grid block size (m)
+
+if(make_spatial_blocks == T) set.seed(seed) # only set on 1st run to creat spatial blocks
 
 library(wgutil)
 library(Hmisc)
@@ -53,7 +54,8 @@ source("functions_maps_of_ignorance.R")
 n_cores <- 1
 
 # select species to fit models to
-sp_to_fit <- list("Boreoiulus tenuis", "Ommatoiulus sabulosus")
+sp_to_fit <- list("Macrosternodesmus palicola", "Boreoiulus tenuis", 
+                  "Ommatoiulus sabulosus", "Blaniulus guttulatus")
 # "Macrosternodesmus palicola"
 names(sp_to_fit) <- sp_to_fit
 
