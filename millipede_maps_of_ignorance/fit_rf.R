@@ -23,6 +23,13 @@ newdata <- readRDS("newdata.rds")
 fold_assignments <- readRDS("fold_assignments.rds")
 block_subsamp <- readRDS("block_subsamp.rds")
 
+# keep only fold assignments for cross-validation sizes to run
+kp <- sapply(fold_assignments, FUN = function(x, cv_size) {
+  if(x$range %in% cv_size) {TRUE} else
+    FALSE
+}, cv_size = cv_block_sizes)
+fold_assignments <- fold_assignments[kp] 
+
 ### fit random forest ---------------------------------------------------------
 fit_rf <- function(test_fold, sp_name, sp_df, pred_names, newdata, 
                    sp_df_original, mtry = NULL, block_cv_range, pred_brick, 
