@@ -18,9 +18,9 @@ calc_1k_distances <- F # run distances for 1km grid (might take a long time)
 seed <- 23012020  # 23 Jan 2020
 
 
-run_rf <- T
+run_rf <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
-get_partial_dependence <- T # calculate partial dependence (time consuming)
+get_partial_dependence <- F # calculate partial dependence (time consuming)
 
 analysis_resolution <- 1000 # analysis resolution (10000 or 1000 m rid squares)
 n_folds <- 3 # number of cross-validation folds to use
@@ -55,7 +55,8 @@ n_cores <- 1
 
 # select species to fit models to
 sp_to_fit <- list("Macrosternodesmus palicola", "Boreoiulus tenuis", 
-                  "Ommatoiulus sabulosus", "Blaniulus guttulatus")
+                  "Ommatoiulus sabulosus", "Blaniulus guttulatus", 
+                  "Glomeris marginata", "Cylindroiulus punctatus")
 # "Macrosternodesmus palicola"
 names(sp_to_fit) <- sp_to_fit
 
@@ -88,12 +89,11 @@ mods_for_pd_plots <- c("env_spat_ll_rf")
 if(run_rf) source("fit_rf.R")
 
 ## evaluate models
-evals <- data.frame() # data frame to hold evaluation results
 # Specify the model(s) using the string that was used as the beginning of the 
 # file names that hold the fitted model objects.  e.g. here use "day_ll_rf" 
 # for the file day_ll_rf_noSubSamp_fits_Julus_scaninavius.rds
-
 for(mod_name in mod_names) {
+  evals <- data.frame() # data frame to hold evaluation results
   source("evaluate_models.R")
 }
 

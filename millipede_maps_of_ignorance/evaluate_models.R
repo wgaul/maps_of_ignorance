@@ -1002,6 +1002,8 @@ for(i in 1:length(sp_to_fit)) {
 }
 ### end evaluation ---------------------------------------------------
 
-write_csv(evals, "./saved_objects/evals.csv")
+print("Writing out evals file.")
 
-rm(test_points_ss)
+write_csv(evals, paste0("./saved_objects/evals_", mod_name, ".csv"))
+
+rm(test_points_ss, evals)

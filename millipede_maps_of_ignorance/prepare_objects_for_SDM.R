@@ -164,3 +164,25 @@ if(make_spatial_blocks) {
   try(saveRDS(fold_assignments, "fold_assignments.rds"))
 }
 saveRDS(newdata, "newdata.rds")
+
+try(rm(agricultural_l1_rast, agricultural_l1_rast_1km, arable_land_l2_rast, 
+       arable_land_l2_rast_1km, artificial_non_ag_vegetated_l2_rast, 
+       artificial_non_ag_vegetated_l2_rast_1km, artificial_surfaces_l1_rast, 
+       artificial_surfaces_l1_rast_1km, clc_l1_props_1km, clc_l1_props_hecs, 
+       elev, elev_1k, forest_l2_rast, forest_l2_rast_1km, 
+       forest_seminatural_l1_rast, forest_seminatural_l1_rast_1km, 
+       heterogeneous_ag_l2_rast, heterogeneous_ag_l2_rast_1km, 
+       industrial_commercial_transport_l2_rast, 
+       industrial_commercial_transport_l2_rast_1km, inland_wetlands_l2_rast, 
+       inland_wetlands_l2_rast_1km, krg_mean_rr_predict, krg_mean_rr_rast, 
+       krg_mean_tn_predict, krg_mean_tn_rast, krg_mean_tx_predict, 
+       krg_mean_tx_rast, maritime_wetlands_l2_rast, 
+       maritime_wetlands_l2_rast_1km, mean_tn_rast_1k, mean_tx_rast_1k, 
+       mill_fewer_vars, mill_wide_df, mill_spat, mine_dump_construction_l2_rast, 
+       mine_dump_construction_l2_rast_1km, open_space_no_veg_l2_rast, 
+       open_space_no_veg_l2_rast_1km, pasture_l2_rast, pasture_l2_rast_1km, 
+       permanent_crops_l2_rast, permanent_crops_l2_rast_1km, rr_rast_1k, 
+       scrub_herbaceous_l2_rast, scrub_herbaceous_l2_rast_1km, 
+       soil_drainage_10km_brick, soil_drainage_1km_brick, soil_IFS_10km_brick, 
+       soil_IFS_1km_brick, urban_fabric_l2_rast, urban_fabric_l2_rast_1km, 
+       wetlands_l1_rast, wetlands_l1_rast_1km))
