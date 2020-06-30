@@ -9,178 +9,175 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 16 June 2020
+## last modified: 30 June 2020
 ##############################
+library(patchwork)
 try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
        mill_spat))
-t_size <- 12
+t_size <- 20
 
-evals <- read.csv("./saved_objects/evals.csv")
+evals <- list.files("./saved_objects/")
+evals <- evals[grepl("evals.*", evals)]
+evals <- bind_rows(lapply(evals, 
+                          FUN = function(x) read.csv(paste0("./saved_objects/", 
+                                                            x))))
 
-# spatial evenness of training and test datasets
-ggplot(data = evals[!is.na(evals$simpson_training_hectad), ], 
-       aes(x = factor(block_cv_range), y = simpson_training_hectad)) + 
-  geom_boxplot() + 
-  facet_wrap(~train_data) + 
-  ggtitle("Spatial Evenness calculated at hectad scale\nincluding hectads with zero observations")
+# order species factor by number of detections (rarest species first)
+evals$species <- factor(evals$species, 
+                        levels = c("Macrosternodesmus palicola", 
+                                   "Boreoiulus tenuis", 
+                                   "Ommatoiulus sabulosus", 
+                                   "Blaniulus guttulatus", 
+                                   "Glomeris marginata", 
+                                   "Cylindroiulus punctatus"))
 
-# spatial evenness of training and test datasets
-ggplot(data = evals[!is.na(evals$simpson_training_subsampBlock), ], 
-       aes(x = factor(block_cv_range), y = simpson_training_subsampBlock)) + 
-  geom_boxplot() + 
-  facet_wrap(~train_data) + 
-  ggtitle("Spatial Evenness calculated at subsample block scale\nincluding hectads with zero observations")
+# Load Ireland coastline
+ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 
-warning("re-do evenness for test data to include zero hectads.")
-mapply(FUN = function(x, nm) hist(x, main = nm, 
-                                  xlab = "Simpson Evenness - Test data"), 
-       evenness_test, names(evenness_test))
+# make annotations for N arrow and scale bar
+annot <- data.frame(x1 = c(265000, 310000, 60000, 60000), 
+                    x2 = c(365000, 310000, 60000, 60000), 
+                    y1 = c(60000, 40000, 400000, 380000), 
+                    y2 = c(60000, 40000, 455000, 380000),
+                    label = c(NA, "100 km", NA, "N"), 
+                    bias = "D")
 
 
-# plot AUC for random CV
-ggplot(data = evals[evals$metric == "AUC" & 
-                      as.character(evals$block_cv_range) == "random", ], 
-       aes(x = factor(train_data, 
-                      levels = c("raw", "spat_subsamp"), 
-                      labels =  c("raw", "spatially\nundersampled")), 
-           y = value, 
-           color = factor(
-             model, 
-             levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
-                        "env_spat_ll_rf"), 
-             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
-                        "\nLat + Lon +\nDOY +\nList Length\n",
-                        "\nEnvironment +\nDOY +\nList Length\n", 
-                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
-  geom_boxplot() + 
-  facet_wrap(~species + factor(
-    test_data, 
-    levels = c("raw", "spat_subsamp"), 
-    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+### Map example spatially under-sampled data ----------------------------------
+## get an example spatially under-sampled dataset
+block_subsamp <- readRDS("./block_subsamp.rds") # load subsampling blocks
+ex_osab <- data.frame(mill_wide)
+# add a column of subsampling block assignments by chosing randomly from
+# the many allocations created in "prepare_objects_for_SDM.R"
+ex_osab$spat_subsamp_cell <- block_subsamp[, sample(2:(ncol(block_subsamp)-1), 
+                                                  size = 1)]
+# spatially sub-sample absence checklists to 1 per cell
+# separate presence and absence checklists.  Keep all presence checklists.
+presences <- ex_osab[ex_osab[, colnames(ex_osab) == 
+                                     "Ommatoiulus.sabulosus"] == 1, ]
+absences <- ex_osab[ex_osab[, colnames(ex_osab) == 
+                                     "Ommatoiulus.sabulosus"] == 0, ]
+cell_abs_tab <- table(absences$spat_subsamp_cell)
+keep_ab_rows <- c()
+for(ri in 1:length(unique(absences$spat_subsamp_cell))) {
+  cell <- unique(absences$spat_subsamp_cell)[ri]
+  keep_ab_rows <- c(keep_ab_rows, 
+                    sample(which(absences$spat_subsamp_cell == cell), 
+                           size = 1))
+}
+absences <- absences[keep_ab_rows, ] 
+# combine spatially sub-sampled non-detection data with all detection data
+ex_osab <- bind_rows(absences, presences)
+ex_osab <- SpatialPointsDataFrame(
+  coords = ex_osab[, c("eastings", "northings")], 
+  data = ex_osab, proj4string = CRS("+init=epsg:29903"))
+
+map_Osab_raw <- ggplot() + 
+  geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+  geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 0, ]), 
+          color = "light grey", size = 0.04*t_size) + 
+  geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 1, ]), 
+          color = "dark orange", size = 0.04*t_size) + 
+  geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+  geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+  geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+               arrow = arrow(length = unit(0.1, "npc"))) + 
+  ylab("Latitude") + xlab("Longitude") + 
+  theme_bw() + 
+  theme(text = element_text(size = 0.7*t_size), 
+        axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+
+map_Osab_spat_subsamp <- ggplot() + 
+  geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+  geom_sf(data = st_as_sf(ex_osab[ex_osab$`Ommatoiulus.sabulosus` == 0, ]), 
+          color = "light grey", size = 0.04*t_size) + 
+  geom_sf(data = st_as_sf(ex_osab[ex_osab$`Ommatoiulus.sabulosus` == 1, ]), 
+          color = "dark orange", size = 0.04*t_size) + 
+  xlab("Longitude") + 
+  theme_bw() + 
+  theme(text = element_text(size = 0.7*t_size), 
+        axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+# print maps using patchwork
+map_Osab_raw + map_Osab_spat_subsamp
+### end map example data -----------------------------------------------------
+
+### plot AUC for random CV ----------------------------------------------------
+auc_all_models_plot <- ggplot(
+  data = evals[evals$metric == "AUC" & 
+                 as.character(evals$block_cv_range) == "random" & 
+                 as.character(evals$test_data) == "spat_subsamp", ], 
+  aes(
+    x = factor(train_data, 
+               levels = c("raw", "spat_subsamp"), 
+               labels =  c("raw", "spatially\nunder-sampled")), 
+    y = value, 
+    color = factor(
+      model, 
+      levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
+                 "env_spat_ll_rf"), 
+      labels = c("\nseason +\nlist length\n", 
+                 "\ncoordinates +\nseason +\nlist length\n",
+                 "\nenvironment +\nseason +\nlist length\n", 
+                 "\nenvironment + \ncoordinates +\nseason +\nlist length")))) + 
+  geom_boxplot(size = 0.9) + 
+  facet_wrap(~factor(species, 
+                     levels = c("Macrosternodesmus palicola", 
+                                "Boreoiulus tenuis", 
+                                "Ommatoiulus sabulosus", 
+                                "Blaniulus guttulatus", 
+                                "Glomeris marginata", 
+                                "Cylindroiulus punctatus"),
+                     labels = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)"))) + 
   xlab("Training Data") + 
   ylab("AUC\n(Cross-Validated)") + 
-  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
-  theme(text = element_text(size = t_size))
+  theme(text = element_text(size = t_size), 
+        axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
+auc_all_models_plot
+### end AUC boxplots ----------------------------------------------------------
 
-ggplot(data = evals[evals$metric == "Kappa" & 
-                      as.character(evals$block_cv_range) == "random", ], 
-       aes(x = factor(train_data, 
-                      levels = c("raw", "spat_subsamp"), 
-                      labels =  c("raw", "spatially\nundersampled")), 
-           y = value, 
-           color = factor(
-             model, 
-             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
-                        "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n",  
-                        "\nLat + Lon + DOY +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n",
-                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
-  geom_boxplot() + 
-  facet_wrap(~species + factor(
-    test_data, 
-    levels = c("raw", "spat_subsamp"), 
-    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+## plot all performance metrics for best model --------------------------------
+evals_median_best <- filter(evals, model == "env_spat_ll_rf" & 
+                              block_cv_range == "random" & 
+                              test_data == "spat_subsamp") %>%
+  select(species, train_data, metric, value) %>%
+  group_by(species, metric, train_data) %>% 
+  summarise(median = median(value))
+
+evals_median_best$species <- factor(
+  evals_median_best$species, 
+  labels = gsub(" ", "\n", levels(evals_median_best$species)))
+
+performance_best_mod_plot <- ggplot(
+  data = evals_median_best, 
+  aes(x = factor(train_data, 
+                 levels = c("raw", "spat_subsamp"), 
+                 labels =  c("raw", "spatially\nundersampled")), 
+      y = median, 
+      group = factor(species))) + 
+  geom_point(aes(color = factor(species)), size = 0.1*t_size) + 
+  geom_line(aes(color = factor(species)), size = 0.05*t_size) + 
+  facet_wrap(~factor(metric, 
+                     levels = c("AUC", "sensitivity", "specificity", "Kappa", 
+                                "Brier"), ordered = T)) + 
   xlab("Training Data") + 
-  ylab("Kappa\n(Cross-Validated)") + 
-  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
-  scale_color_viridis_d(name = "Model", #option = "magma", 
-                        begin = 0.1, end = 0.8) + 
+  ylab("value") + 
+  # ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
+  scale_color_viridis_d(begin = 0, end = 0.8) + 
   theme_bw() + 
-  theme(text = element_text(size = t_size))
-
-# plot sensitivity
-ggplot(data = evals[evals$metric == "sensitivity" & 
-                      as.character(evals$block_cv_range) == "random", ], 
-       aes(x = factor(train_data, 
-                      levels = c("raw", "spat_subsamp"), 
-                      labels =  c("raw", "spatially\nundersampled")), 
-           y = value, 
-           color = factor(
-             model, 
-             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf",  
-                        "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n",  
-                        "\nLat + Lon + DOY +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
-                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
-  geom_boxplot() + 
-  facet_wrap(~species + factor(
-    test_data, 
-    levels = c("raw", "spat_subsamp"), 
-    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
-  xlab("Training Data") + 
-  ylab("Sensitivity\n(Cross-Validated)") + 
-  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
-  scale_color_viridis_d(name = "Model", #option = "magma", 
-                        begin = 0.1, end = 0.8) + 
-  theme_bw() + 
-  theme(text = element_text(size = t_size))
-
-
-# plot specificity
-ggplot(data = evals[evals$metric == "specificity" & 
-                      as.character(evals$block_cv_range) == "random", ], 
-       aes(x = factor(train_data, 
-                      levels = c("raw", "spat_subsamp"), 
-                      labels =  c("raw", "spatially\nundersampled")), 
-           y = value, 
-           color = factor(
-             model, 
-             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
-                        "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n",
-                        "\nLat + Lon + DOY +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
-                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
-  geom_boxplot() + 
-  facet_wrap(~species + factor(
-    test_data, 
-    levels = c("raw", "spat_subsamp"), 
-    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
-  xlab("Training Data") + 
-  ylab("Specificity\n(block Cross-Validated)") + 
-  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
-  scale_color_viridis_d(name = "Model", #option = "magma", 
-                        begin = 0.1, end = 0.8) + 
-  theme_bw() + 
-  theme(text = element_text(size = t_size))
-
-# plot Brier score
-ggplot(data = evals[evals$metric == "Brier" & 
-                      as.character(evals$block_cv_range) == "random", ], 
-       aes(x = factor(train_data, 
-                      levels = c("raw", "spat_subsamp"), 
-                      labels =  c("raw", "spatially\nundersampled")), 
-           y = value, 
-           color = factor(
-             model, 
-             levels = c("day_ll_rf", "spat_ll_rf", "env_ll_rf", 
-                        "env_spat_ll_rf"), 
-             labels = c("\nDay of Year (DOY) +\nList Length\n", 
-                        "\nLat + Lon + DOY +\nList Length\n", 
-                        "\nEnvironment + DOY +\nList Length\n", 
-                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
-  geom_boxplot() + 
-  facet_wrap(~species + factor(
-    test_data, 
-    levels = c("raw", "spat_subsamp"), 
-    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
-  xlab("Training Data") + 
-  ylab("Brier score\n(Cross-Validated)") + 
-  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
-  scale_color_viridis_d(name = "Model", #option = "magma", 
-                        begin = 0.1, end = 0.8) + 
-  theme_bw() + 
-  theme(text = element_text(size = t_size))
+  theme(text = element_text(size = 0.9*t_size), 
+        legend.position = c(0.84, 0.18), legend.title = element_blank(), 
+        legend.key.size = unit(2*t_size, "points"), 
+        legend.text = element_text(size = 0.7*t_size))
+performance_best_mod_plot
+## end plot performance for best model ----------------------------------------
 ### end random CV -------------------------------------------------------------
 
 
-
-### plot variable importance only for models of interest ----------------------
+### plot partial dependence --------------------------------------------------
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
@@ -194,29 +191,8 @@ vimp <- lapply(vimp, FUN = function(x) {
               species = unique(species), model = unique(model), 
               train_dat = unique(train_dat))
 })
-
 vimp <- bind_rows(vimp)
 
-vimp_plots <- lapply(sp_to_fit, FUN = function(x, v_df) {
-  dat <- v_df[v_df$cv == "random" & v_df$species == x, ]
-  dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
-  ggplot(data = dat, 
-         aes(x = factor(variable, levels = dat$variable, 
-                        labels = dat$variable, ordered = T), 
-             y = MeanDecreaseGini)) + 
-    geom_bar(stat = "identity") + 
-    coord_flip() + 
-    ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
-                   dat$train_dat[1], "\n", "CV: ", dat$cv[1], 
-                   " analysis resolution: ", analysis_resolution)) + 
-    facet_wrap(~factor(train_dat), scales = "free")
-}, v_df = vimp)
-
-for(i in 1:length(vimp_plots)) print(vimp_plots[i])
-### end plot variable importance ---------------------------------------------
-
-
-### plot partial dependence --------------------------------------------------
 # read in partial dependence files
 pd <- list.files("./saved_objects/")
 pd <- pd[grepl("partial_depen.*", pd)]
@@ -229,72 +205,126 @@ pd <- lapply(pd, FUN = function(x) {
   group_by(x, x, variable, cv) %>%
     summarise(y = mean(y), 
               species = unique(species), model = unique(model), 
-              train_data = unique(train_data))
+              train_data = unique(train_data)) %>%
+    filter(variable != "cos_doy" & variable != "sin_doy")
 })
+pd <- bind_rows(pd)
+# make eastings and northings be in km instead of m
+pd$x[pd$variable == "eastings" | pd$variable == "northings"] <- 
+  pd$x[pd$variable == "eastings" | pd$variable == "northings"] / 1000
 
-# make plots only using the "random" CV, which is the one I will use for results
-pd_plots <- lapply(pd, FUN = function(x) {
-  dat <- x[x$cv == "random", ]
-  ggplot(data = dat, 
-         aes(x = x, y = y)) + 
-    geom_point() + 
-    geom_line() + 
+## make pd plots using random CV, spatially under-sampled training data, and
+## the best model
+pd_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
+  vi <- vimp[vimp$species == x, ] # get variable importance for this sp.
+  vi <- vi[order(vi$MeanDecreaseGini, decreasing = T), ]
+  vi <- vi[-which(grepl(".*doy", vi$variable))[2], ]
+  vi$variable <- gsub(".*doy", "day_of_year", vi$variable)
+  # make better variable names
+  vi$variable <- gsub("arabl.*", "arable\nland", vi$variable)
+  vi$variable <- gsub("artific.*", "artificial\nsurfaces", vi$variable)
+  vi$variable <- gsub("elev", "elevation", vi$variable)
+  vi$variable <- gsub("fores.*", "forest and\nsemi-natural land", vi$variable)
+  vi$variable <- gsub("list_l.*", "checklist\nlength", vi$variable)
+  vi$variable <- gsub("mean_rr", "annual\nprecipitation", vi$variable)
+  vi$variable <- gsub("mean_tn", "annual minimum\ntemperature", vi$variable)
+  vi$variable <- gsub("pastu.*", "pasture", vi$variable)
+  vi$variable <- gsub("wetla.*", "wetlands", vi$variable)
+  vi$variable <- gsub("day_o.*", "day of\nyear", vi$variable)
+  
+  # make variable column a factor
+  vi$variable <- factor(vi$variable, levels = vi$variable, 
+                        ordered = T)
+  
+  pdat <- dat[dat$species == x, ] # get pd data for this sp.
+  # make better variable names
+  pdat$variable <- gsub("arabl.*", "arable\nland", pdat$variable)
+  pdat$variable <- gsub("artific.*", "artificial\nsurfaces", pdat$variable)
+  pdat$variable <- gsub("elev", "elevation", pdat$variable)
+  pdat$variable <- gsub("fores.*", "forest and\nsemi-natural land", 
+                        pdat$variable)
+  pdat$variable <- gsub("list_l.*", "checklist\nlength", pdat$variable)
+  pdat$variable <- gsub("mean_rr", "annual\nprecipitation", pdat$variable)
+  pdat$variable <- gsub("mean_tn", "annual minimum\ntemperature", pdat$variable)
+  pdat$variable <- gsub("pastu.*", "pasture", pdat$variable)
+  pdat$variable <- gsub("wetla.*", "wetlands", pdat$variable)
+  pdat$variable <- gsub("day_o.*", "day of\nyear", pdat$variable)
+  # make variable column a factor
+  pdat$variable <- factor(pdat$variable, levels = levels(vi$variable))
+ 
+  ggplot(data = pdat,
+         aes(x = x, y = y)) +
+    geom_point() +
+    geom_line() +
     facet_wrap(~variable, scales = "free_x") +
-    ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
-                   dat$train_data[1], "\n", "CV: ", dat$cv[1], 
-                   "\nanalysis resolution: ", analysis_resolution))
-})
+    ylab("Partial dependence") + 
+    xlab("Variable value") + 
+    ggtitle(pdat$species[1]) + 
+    theme_bw() + 
+    theme(text = element_text(size = t_size), 
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+}, dat = pd[pd$train_data == "spat_subsamp" & pd$cv == "random", ], 
+vimp = vimp[vimp$train_dat == "spat_subsamp" & vimp$cv == "random", ])
 
-for(i in 1:length(pd_plots)) print(pd_plots[i])
-rm(pd)
+for(sn in c("Macrosternodesmus palicola", "Boreoiulus tenuis",
+            "Ommatoiulus sabulosus",  "Blaniulus guttulatus")) {
+  print(pd_plots[sn])
+}
+rm(pd, vimp)
 ### end plot partial dependence -----------------------------------------------
 
 
 ### plot predictions with standardized list length ----------------------------
 # load standardized predictions
-stpred <- list.files("./saved_objects/")
-stpred <- stpred[grepl("standard_pre.*", stpred)]
-stpred <- stpred[grepl(paste0(".*", analysis_resolution, ".rds"), stpred)]
-stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), 
-                       stpred)]
-names(stpred) <- gsub("standard.*tions_", "", stpred)
-names(stpred) <- gsub(".rds", "", names(stpred))
-# stpred <- lapply(stpred, 
-#                  FUN = function(x) readRDS(paste0("./saved_objects/", x)))
+osab_preds <- list(raw = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_noSubSamp_Ommatoiulus_sabulosus1000.rds"), 
+                   spat_subsamp = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_Ommatoiulus_sabulosus1000.rds"))
 
-# plot average of predictions from all 5 folds (so 4 predictions will be to
-# training data, one prediction to test data in each grid cell)
-prediction_plots <- mapply(FUN = function(x, nm, mill) {
-  dat <- readRDS(paste0("./saved_objects/", x)) # load object
+osab_maps <- lapply(osab_preds, function(dat, annot) {
   # map only predictions from random CV
   dat <- dat[dat$cv == "random", ] # use only random CV results
-  sp <- gsub(".*Samp_", "", nm) # get species name
-  sp <- gsub("1000.*", "", sp)
-  sp <- gsub("_", " ", sp)
-  mod <- gsub("_SubSamp.*|_noSub.*", "", nm) # get model name
-  train_data <- gsub("^.*_rf_", "", nm) # get training data type name
-  train_data <- gsub("_.*_.*$", "", train_data)
+  sp <- "Ommatoiulus sabulosus"
+  mod <- "env_spat_ll_rf"
   
   # get average predictions for each grid cell (averaging over all folds)
   dat <- group_by(dat, en) %>%
     summarise(mean_prediction = mean(mean_pred, na.rm = T), 
               eastings = mean(eastings), northings = mean(northings))
-  ggplot() + 
-    geom_tile(data = dat, 
-              aes(x = eastings, y = northings, fill = mean_prediction)) + 
-    geom_point(data = mill, aes(x = eastings, y = northings),
-               color = "light grey", size = 0.5) +
-    geom_point(data = mill[mill$Genus_species == sp, ],
-               aes(x = eastings, y = northings), color = "orange") +
-    ggtitle(paste0(sp, "\n", mod, " trained with ", train_data)) + 
-    theme_bw()
-}, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
 
-for(i in 1:length(prediction_plots)) print(prediction_plots[i])
+  ggplot() + 
+    geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+    geom_tile(data = dat, 
+              aes(x = eastings, y = northings, fill = mean_prediction)) +
+    ylab("") + xlab("Longitude") + 
+    guides(fill = guide_colorbar(title = "", 
+                               barwidth = unit(0.4 * t_size, "points"))) +
+    theme_bw() + 
+    theme(text = element_text(size = 0.6*t_size), 
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+}, annot = annot)
+
+osab_maps[[3]] <- ggplot() + 
+  geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+  geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 0, ]), 
+          color = "light grey", size = 0.02*t_size) + 
+  geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 1, ]), 
+          color = "dark orange", size = 0.02*t_size) + 
+  geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+  geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+  geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+               arrow = arrow(length = unit(0.1, "npc"))) + 
+  ylab("Latitude") + xlab("Longitude") + 
+  theme_bw() + 
+  theme(text = element_text(size = 0.6*t_size), 
+        axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+# re-order maps
+osab_maps <- list(observed = osab_maps[[3]], raw = osab_maps[[1]], 
+                  spat_subsamp = osab_maps[[2]])
+# print plots using patchwork
+osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]]
 ### end plot standardized predictions -----------------------------------------
 
 
-### save figures and tables ---------------------------------------------------
+### print tables and numbers for text ------------------------------------------
 # Number of repeat visits to grid cells (though there could be multiple 
 # locations visited within a grid cell, so these are not necessarily true 
 # repeat visits)
@@ -315,15 +345,6 @@ length(which(mill_wide$list_length == 1)) / nrow(mill_wide)
 # proportion of lists with list lenght of 1
 length(which(mill_wide$list_length == 2)) / nrow(mill_wide)
 
-# Number of detections per species when using 10km resolution
-n_detections_per_species_10km <- data.frame(table(mill$Genus_species))
-n_detections_per_species_10km <- n_detections_per_species_10km[order(
-  n_detections_per_species_10km$Freq, decreasing = FALSE), ]
-colnames(n_detections_per_species_10km) <- c("species", "number_of_detections")
-n_detections_per_species_10km <- n_detections_per_species_10km[
-  n_detections_per_species_10km$species %in% sp_to_fit, ]
-n_detections_per_species_10km
-
 # Number of detections per species when using 1 km resolution
 n_detections_per_species_1km <- data.frame(
   table(mill$Genus_species[mill$Precision <= 1000]))
@@ -332,6 +353,31 @@ n_detections_per_species_1km <- n_detections_per_species_1km[order(
 colnames(n_detections_per_species_1km) <- c("species", "number_of_detections")
 n_detections_per_species_1km <- n_detections_per_species_1km[
   n_detections_per_species_1km$species %in% sp_to_fit, ]
+# add proportion of checklists that have a detection of each species
+n_detections_per_species_1km$proportion_detections <- round(
+  n_detections_per_species_1km$number_of_detections / nrow(mill_wide), 
+  digits = 3)
 n_detections_per_species_1km
 
-### end save figures and tables -----------------------------------------------
+### end print tables and numbers for text  ------------------------------------
+
+### save plots -----------------------------------------------------------------
+## save as jpg
+ggsave("Fig1.jpg", map_Osab_raw + map_Osab_spat_subsamp, 
+       width = 20, height = 20/2, units = "cm", 
+       device = "jpg")
+ggsave("Fig2.jpg", auc_all_models_plot, width = 20, height = 20, units = "cm", 
+       device = "jpg")
+ggsave("Fig3.jpg", performance_best_mod_plot, width = 20, height = 20, 
+       units = "cm", device = "jpg")
+ggsave("Fig4.jpg", pd_plots[["Ommatoiulus sabulosus"]] + ggtitle(""), 
+       width = 20, height = 20, units = "cm", device = "jpg")
+ggsave("Fig5.jpg", osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]], 
+       width = 20, height = 20/3, units = "cm", device = "jpg")
+
+
+## save as eps
+ggsave("Figure 1.eps", spat_evenness_boxplot, width = 25, height = 25, 
+       units = "cm", device = "eps")
+
+### end save plots ------------------------------------------------------------

@@ -9,7 +9,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 25 Oct 2019
-## last modified: 19 June 2020
+## last modified: 28 June 2020
 #################################
 
 rm(list = ls())
@@ -21,6 +21,7 @@ seed <- 23012020  # 23 Jan 2020
 run_rf <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 get_partial_dependence <- F # calculate partial dependence (time consuming)
+run_evals <- F
 
 analysis_resolution <- 1000 # analysis resolution (10000 or 1000 m rid squares)
 n_folds <- 3 # number of cross-validation folds to use
@@ -92,9 +93,11 @@ if(run_rf) source("fit_rf.R")
 # Specify the model(s) using the string that was used as the beginning of the 
 # file names that hold the fitted model objects.  e.g. here use "day_ll_rf" 
 # for the file day_ll_rf_noSubSamp_fits_Julus_scaninavius.rds
-for(mod_name in mod_names) {
+if(run_evals) {
+  for(mod_name in mod_names) {
   evals <- data.frame() # data frame to hold evaluation results
   source("evaluate_models.R")
+  }
 }
 
 ## make plots

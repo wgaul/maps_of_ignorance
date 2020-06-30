@@ -5,7 +5,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 16 June 2020
+## last modified: 30 June 2020
 ##############################
 t_size <- 12
 
@@ -56,6 +56,15 @@ ggplot(data = ll_df, aes(x = eastings, y = northings, fill = median_ll)) +
 #   theme_bw()
 ## end checklist length plots -------------------------------------------------
 
+## spatial evenness of training and test datasets ----------------------------
+spat_evenness_boxplot <- ggplot(
+  data = evals[!is.na(evals$simpson_training_subsampBlock), ], 
+  aes(x = factor(block_cv_range), y = simpson_training_subsampBlock)) + 
+  geom_boxplot() + 
+  facet_wrap(~train_data) + 
+  ggtitle("Spatial Evenness of training data\ncalculated at subsample block scale\nincluding cells with zero observations")
+spat_evenness_boxplot
+### end spatial evenness of datasets plot --------------------------------------
 
 ## plot results using random CV -----------------------------------------------
 # how many detections and non-detections in test folds?
@@ -135,11 +144,74 @@ ggplot(data = evals[evals$metric == "AUC" & !is.na(evals$block_cv_range), ],
 
 
 
+### plot AUC with all combinations of training and test data for random CV ----
+ggplot(data = evals[evals$metric == "AUC" & 
+                      as.character(evals$block_cv_range) == "random", ], 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = value, 
+           color = factor(
+             model, 
+             levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
+                        "env_spat_ll_rf"), 
+             labels = c("\nDay of Year\n(DOY) +\nList Length\n", 
+                        "\nLat + Lon +\nDOY +\nList Length\n",
+                        "\nEnvironment +\nDOY +\nList Length\n", 
+                        "\nEnvironment + \nLat + Long +\nDOY +\nList Length")))) + 
+  geom_boxplot() + 
+  facet_wrap(~species + factor(
+    test_data, 
+    levels = c("raw", "spat_subsamp"), 
+    labels = c("test data - raw", "test data -\nspatially undersampled"))) + 
+  xlab("Training Data") + 
+  ylab("AUC\n(Cross-Validated)") + 
+  ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+### end AUC ----------------------------------------------------------------
+
+
+## plot all performance metrics for best model - block CV ---------------------
+evals_median_blockCV <- filter(evals, model == "env_spat_ll_rf" & 
+                              block_cv_range == "30000" & 
+                              test_data == "spat_subsamp") %>%
+  select(species, train_data, metric, value) %>%
+  group_by(species, metric, train_data) %>% 
+  summarise(median = median(value))
+
+
+ggplot(data = evals_median_blockCV, 
+       aes(x = factor(train_data, 
+                      levels = c("raw", "spat_subsamp"), 
+                      labels =  c("raw", "spatially\nundersampled")), 
+           y = median, 
+           group = factor(species))) + 
+  geom_point(aes(color = factor(species))) + 
+  geom_line(aes(color = factor(species))) + 
+  facet_wrap(~factor(metric, 
+                     levels = c("AUC", "sensitivity", "specificity", "Kappa", 
+                                "Brier"), ordered = T)) + 
+  xlab("Training Data") + 
+  ylab("value") + 
+  ggtitle(paste0("30 km block CV\nmodel resolution: ", analysis_resolution)) + 
+  scale_color_viridis_d(name = "Species", #option = "magma", 
+                        begin = 0, end = 0.8) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+## end plot performance for best model - block CV ------------------------------
+
+
 
 ### plot variable importance ---------------------------------------------------
+### plot variable importance only for best model -----------------------
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- vimp[grepl(paste0(".*", analysis_resolution, ".rds"), vimp)]
+vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
 vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
 # average the variable importance from each CV fold
 vimp <- lapply(vimp, FUN = function(x) {
@@ -148,9 +220,10 @@ vimp <- lapply(vimp, FUN = function(x) {
               species = unique(species), model = unique(model), 
               train_dat = unique(train_dat))
 })
+vimp <- bind_rows(vimp)
 
-vimp_plots <- lapply(vimp, FUN = function(x) {
-  dat <- x[x$cv == "random", ]
+vimp_plots_best <- lapply(sp_to_fit, FUN = function(x, v_df) {
+  dat <- v_df[v_df$cv == "random" & v_df$species == x, ]
   dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
   ggplot(data = dat, 
          aes(x = factor(variable, levels = dat$variable, 
@@ -158,16 +231,34 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
              y = MeanDecreaseGini)) + 
     geom_bar(stat = "identity") + 
     coord_flip() + 
-    ggtitle(paste0(dat$species[1], "\n", dat$model[1], ", trained with: ", 
-                   dat$train_dat[1], "\n", "CV: ", dat$cv[1]))
-})
+    xlab("") + 
+    ggtitle(dat$species[1]) +
+    # ggtitle(paste0(dat$species[1], "\n", dat$model[1], "\n", 
+    #                "CV: ", dat$cv[1], 
+    #                " analysis resolution: ", analysis_resolution)) + 
+    facet_wrap(~factor(train_dat), scales = "free")
+}, v_df = vimp)
 
-# plot variable importance for all models
-for(i in 1:length(vimp_plots)) print(vimp_plots[i])
+# for(i in 1:length(vimp_plots_best)) print(vimp_plots_best[i])
+multiplot(plotlist = vimp_plots_best, cols = 2) # variable importance for best model
 
 
-# graph variable importance by CV strategy
+## graph variable importance by CV strategy for best model and both raw and 
+## subsampled training data
 # CV strategy does not change variable importance conlcusions
+# read in variable importance results
+vimp <- list.files("./saved_objects/")
+vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- vimp[grepl(paste0(".*", analysis_resolution, ".rds"), vimp)]
+vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
+vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
+# average the variable importance from each CV fold
+vimp <- lapply(vimp, FUN = function(x) {
+  group_by(x, variable, cv) %>%
+    summarise(MeanDecreaseGini = mean(MeanDecreaseGini), 
+              species = unique(species), model = unique(model), 
+              train_dat = unique(train_dat))
+})
 vimp_plots <- lapply(vimp, FUN = function(x) {
   ggplot(data = x, 
          aes(x = variable, y = MeanDecreaseGini)) + 
@@ -182,3 +273,149 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 ### end plot variable importance -----------------------------------------------
 
 
+### plot partial dependence ---------------------------------------------------
+# plot pd from raw and spatially under-sampled training data
+## make pd plots using random CV, spatially under-sampled training data, and
+## the best model
+# read in variable importance results
+vimp <- list.files("./saved_objects/")
+vimp <- vimp[grepl("var_import.*", vimp)]
+vimp <- vimp[grepl(paste0(".*", analysis_resolution, ".rds"), vimp)]
+vimp <- vimp[grepl(".*env_spat_ll.*", vimp)]
+vimp <- lapply(vimp, function(x) readRDS(paste0("./saved_objects/", x)))
+# average the variable importance from each CV fold
+vimp <- lapply(vimp, FUN = function(x) {
+  group_by(x, variable, cv) %>%
+    summarise(MeanDecreaseGini = mean(MeanDecreaseGini), 
+              species = unique(species), model = unique(model), 
+              train_dat = unique(train_dat))
+})
+vimp <- bind_rows(vimp)
+
+# read in partial dependence files
+pd <- list.files("./saved_objects/")
+pd <- pd[grepl("partial_depen.*", pd)]
+pd <- pd[grepl(paste0(".*", analysis_resolution, ".rds"), pd)]
+pd <- pd[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), pd)]
+names(pd) <- pd
+pd <- lapply(pd, function(x) readRDS(paste0("./saved_objects/", x)))
+# average the dependence for each variable from each CV fold
+pd <- lapply(pd, FUN = function(x) {
+  group_by(x, x, variable, cv) %>%
+    summarise(y = mean(y), 
+              species = unique(species), model = unique(model), 
+              train_data = unique(train_data)) %>%
+    filter(variable != "cos_doy" & variable != "sin_doy")
+})
+pd <- bind_rows(pd)
+
+# make plots
+pd_raw_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
+  vi <- vimp[vimp$species == x, ] # get variable importance for this sp.
+  vi <- vi[order(vi$MeanDecreaseGini, decreasing = T), ]
+  vi <- vi[-which(grepl(".*doy", vi$variable))[2], ]
+  vi$variable <- gsub(".*doy", "day_of_year", vi$variable)
+  vi$variable <- factor(vi$variable, levels = vi$variable,
+                        ordered = T)
+
+  pdat <- dat[dat$species == x, ] # get pd data for this sp.
+  pdat$variable <- factor(pdat$variable, levels = levels(vi$variable))
+
+  ggplot(data = pdat,
+         aes(x = x, y = y)) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(~variable, scales = "free_x") +
+    ylab("Partial dependence") +
+    xlab("Variable value") +
+    ggtitle(pdat$species[1])
+}, dat = pd[pd$train_data == "raw" & pd$cv == "random", ],
+vimp = vimp[vimp$train_dat == "spat_subsamp" & vimp$cv == "random", ])
+
+pd_to_print <- list()
+for(i in 1:length(pd_plots)) {
+  # add plots from raw training data
+  if(names(pd_raw_plots)[i] %in% c("Macrosternodesmus palicola",
+                               "Ommatoiulus sabulosus",
+                               "Cylindroiulus punctatus")) {
+    pd_to_print[[length(pd_to_print) + 1]] <- pd_raw_plots[[i]]
+    names(pd_to_print)[length(pd_to_print)] <- paste0(names(pd_raw_plots)[i],
+                                                      " raw")
+  }
+  # add plots from spatially subsampled training data
+  if(names(pd_plots)[i] %in% c("Macrosternodesmus palicola",
+                               "Ommatoiulus sabulosus",
+                               "Cylindroiulus punctatus")) {
+    pd_to_print[[length(pd_to_print) + 1]] <- pd_plots[[i]]
+    names(pd_to_print)[length(pd_to_print)] <- names(pd_plots)[i]
+  }
+}
+
+multiplot(plotlist = pd_to_print, layout = matrix(c(1:6), nrow = 3, byrow = T))
+### end plot partial dependence ---------------------------------------------
+
+### plot predictions with standardized list length ----------------------------
+# load standardized predictions
+stpred <- list.files("./saved_objects/")
+stpred <- stpred[grepl("standard_pre.*", stpred)]
+stpred <- stpred[grepl(paste0(".*", analysis_resolution, ".rds"), stpred)]
+stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"), 
+                       stpred)]
+names(stpred) <- gsub("standard.*tions_", "", stpred)
+names(stpred) <- gsub(".rds", "", names(stpred))
+
+# plot average of predictions from all 5 folds (so 4 predictions will be to
+# training data, one prediction to test data in each grid cell)
+prediction_plots <- mapply(FUN = function(x, nm, mill) {
+  dat <- readRDS(paste0("./saved_objects/", x)) # load object
+  # map only predictions from random CV
+  dat <- dat[dat$cv == "random", ] # use only random CV results
+  sp <- gsub(".*Samp_", "", nm) # get species name
+  sp <- gsub("1000.*", "", sp)
+  sp <- gsub("_", " ", sp)
+  mod <- gsub("_SubSamp.*|_noSub.*", "", nm) # get model name
+  train_data <- gsub("^.*_rf_", "", nm) # get training data type name
+  train_data <- gsub("_.*_.*$", "", train_data)
+  
+  # get average predictions for each grid cell (averaging over all folds)
+  dat <- group_by(dat, en) %>%
+    summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+              eastings = mean(eastings), northings = mean(northings))
+  ggplot() + 
+    geom_tile(data = dat, 
+              aes(x = eastings, y = northings, fill = mean_prediction)) + 
+    ggtitle(sp) + 
+    scale_fill_continuous(name = "") + 
+    theme_bw()
+}, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
+
+multiplot(plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
+          layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
+multiplot(plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)], 
+          layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
+# for(i in 1:length(prediction_plots)) print(prediction_plots[i])
+### end plot standardized predictions -----------------------------------------
+
+
+
+
+
+#### save plots to files -------------------------------------------------------
+ggsave("FigS1.jpg", spat_evenness_boxplot, width = 25, height = 25, 
+       units = "cm", device = "jpg")
+
+ggsave("FigS4.jpg", pd_plots[["Macrosternodesmus palicola"]], 
+       width = 25, height = 25, units = "cm", device = "jpg")
+ggsave("FigS5.jpg", pd_plots[["Boreoiulus tenuis"]], 
+       width = 25, height = 25, units = "cm", device = "jpg")
+ggsave("FigS6.jpg", pd_plots[["Blaniulus guttulatus"]], 
+       width = 25, height = 25, units = "cm", device = "jpg")
+
+ggsave("FigS8.jpg", multiplot(
+  plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
+  layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T)), 
+  width = 25, height = 25, units = "cm", device = "jpg")
+ggsave("FigS9.jpg", multiplot(
+  plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)], 
+  layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T)), 
+  width = 25, height = 25, units = "cm", device = "jpg")
