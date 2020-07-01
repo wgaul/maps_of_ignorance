@@ -9,7 +9,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 30 June 2020
+## last modified: 1 July 2020
 ##############################
 library(patchwork)
 try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
@@ -84,6 +84,7 @@ map_Osab_raw <- ggplot() +
   geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
                arrow = arrow(length = unit(0.1, "npc"))) + 
   ylab("Latitude") + xlab("Longitude") + 
+  ggtitle("(a)") +
   theme_bw() + 
   theme(text = element_text(size = 0.7*t_size), 
         axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
@@ -94,7 +95,7 @@ map_Osab_spat_subsamp <- ggplot() +
           color = "light grey", size = 0.04*t_size) + 
   geom_sf(data = st_as_sf(ex_osab[ex_osab$`Ommatoiulus.sabulosus` == 1, ]), 
           color = "dark orange", size = 0.04*t_size) + 
-  xlab("Longitude") + 
+  xlab("Longitude") + ggtitle("(b)") + 
   theme_bw() + 
   theme(text = element_text(size = 0.7*t_size), 
         axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
@@ -129,8 +130,8 @@ auc_all_models_plot <- ggplot(
                                 "Glomeris marginata", 
                                 "Cylindroiulus punctatus"),
                      labels = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)"))) + 
-  xlab("Training Data") + 
-  ylab("AUC\n(Cross-Validated)") + 
+  xlab("Training data") + 
+  ylab("AUC\n(cross-validated)") + 
   scale_color_viridis_d(name = "Model", #option = "magma", 
                         begin = 0.1, end = 0.8) + 
   theme_bw() + 
@@ -162,8 +163,10 @@ performance_best_mod_plot <- ggplot(
   geom_line(aes(color = factor(species)), size = 0.05*t_size) + 
   facet_wrap(~factor(metric, 
                      levels = c("AUC", "sensitivity", "specificity", "Kappa", 
-                                "Brier"), ordered = T)) + 
-  xlab("Training Data") + 
+                                "Brier"), 
+                     labels = c("AUC", "Sensitivity", "Specificity", "Kappa", 
+                                "Brier Score"), ordered = T)) + 
+  xlab("Training data") + 
   ylab("value") + 
   # ggtitle(paste0("Random CV\nmodel resolution: ", analysis_resolution)) + 
   scale_color_viridis_d(begin = 0, end = 0.8) + 
@@ -298,8 +301,9 @@ osab_maps <- lapply(osab_preds, function(dat, annot) {
     guides(fill = guide_colorbar(title = "", 
                                barwidth = unit(0.4 * t_size, "points"))) +
     theme_bw() + 
-    theme(text = element_text(size = 0.6*t_size), 
-          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+    theme(text = element_text(size = 0.5*t_size), 
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+          plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
 }, annot = annot)
 
 osab_maps[[3]] <- ggplot() + 
@@ -314,11 +318,16 @@ osab_maps[[3]] <- ggplot() +
                arrow = arrow(length = unit(0.1, "npc"))) + 
   ylab("Latitude") + xlab("Longitude") + 
   theme_bw() + 
-  theme(text = element_text(size = 0.6*t_size), 
-        axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+  theme(text = element_text(size = 0.5*t_size), 
+        axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+        plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
 # re-order maps
 osab_maps <- list(observed = osab_maps[[3]], raw = osab_maps[[1]], 
                   spat_subsamp = osab_maps[[2]])
+# add titles
+osab_maps[[1]] <- osab_maps[[1]] + ggtitle("(a)")
+osab_maps[[2]] <- osab_maps[[2]] + ggtitle("(b)")
+osab_maps[[3]] <- osab_maps[[3]] + ggtitle("(c)")
 # print plots using patchwork
 osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]]
 ### end plot standardized predictions -----------------------------------------
@@ -331,7 +340,7 @@ osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]]
 repeat_visits <- data.frame(
   en = paste0(mill_wide$eastings, "_", mill_wide$northings), 
   year = mill_wide$year)
-table(repeat_visits$en)[order(table(repeat_visits$en), decreasing = T)]
+# table(repeat_visits$en)[order(table(repeat_visits$en), decreasing = T)]
 table(as.numeric(table(repeat_visits$en, repeat_visits$year)))
 # # look at most re-visited grid cell
 # data.frame(mill_wide[mill_wide$eastings == 316499 & 

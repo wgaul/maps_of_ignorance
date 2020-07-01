@@ -5,36 +5,36 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 30 June 2020
+## last modified: 1 July 2020
 ##############################
-t_size <- 12
+t_size <- 20
 
 library(GGally)
 
 ## predictor variable correlations ------------------------------------------
-predictors_df <- data.frame(newdata[newdata$day_of_year == 20, ])
-predictors_df <- predictors_df[, colnames(predictors_df) %in% 
-                                c("hectad", "mean_tn", "mean_tx", 
-                                  "mean_rr", "artificial_surfaces", 
-                                  "forest_seminatural_l1", 
-                                  "wetlands_l1", "pasture_l2", 
-                                  "arable_l2", "elev", 
-                                  "eastings", "northings", 
-                                  "sin_doy", "cos_doy")]
-ggpairs(data = predictors_df, columns = 2:ncol(predictors_df), 
-        title = "Predictor variable values\nfor all hectads")
-
-ggpairs(data = mill, columns = which(colnames(mill) %in% 
-                                       c("mean_tn", 
-                                         "mean_rr", "artificial_surfaces", 
-                                         "forest_seminatural_l1", 
-                                         "wetlands_l1", "pasture_l2", 
-                                         "arable_l2", "elev", 
-                                         "eastings", "northings", 
-                                         "sin_doy", "cos_doy", "day_of_year",
-                                         "list_length")), 
-        title = "Predictor variable values\non millipede checklists")
-## end predictor variable correlatins --------------------------------------
+# make sure predictor variables are in the order I specify in the colnames 
+# argument to ggpairs
+pred_vals <- data.frame(eastings = mill_wide$eastings, 
+                        northings = mill_wide$northings, 
+                        day_of_year = mill_wide$day_of_year, 
+                        list_length = mill_wide$list_length, 
+                        mean_tn = mill_wide$mean_tn, 
+                        mean_rr = mill_wide$mean_rr, 
+                        elev = mill_wide$elev, 
+                        artificial = mill_wide$artificial_surfaces, 
+                        arable = mill_wide$arable_l2, 
+                        wetlands = mill_wide$wetlands_l1, 
+                        forest = mill_wide$forest_seminatural_l1, 
+                        pasture = mill_wide$pasture_l2)
+pred_cor_plot <- ggpairs(
+  data = pred_vals, 
+  # title = "Predictor variable values\non millipede checklists", 
+  axisLabels = "none", 
+  columnLabels = c("eastings", "northings", "day of\nyear", "checklist\nlength",
+                   "min.\ntemp.", "precip.", "elevation", 
+                   "artificial\nsurfaces", "arable\nland", 
+                   "wetlands", "forest\nand\nsemi-\nnatural", "pasture"))
+## end predictor variable correlations --------------------------------------
 
 ## checklist length plots -----------------------------------------------------
 hist(mill_wide$list_length, breaks = 15)
@@ -45,10 +45,12 @@ ll_df <- group_by(data.frame(mill_wide), hectad) %>%
             n_lists = n()) %>% 
   left_join(., hec_names)
 
-ggplot(data = ll_df, aes(x = eastings, y = northings, fill = median_ll)) + 
+list_length_map <- ggplot(data = ll_df, 
+                          aes(x = eastings, y = northings, fill = median_ll)) + 
   geom_tile() + 
   scale_fill_continuous(name = "Median\nchecklist\nlength") + 
-  theme_bw()
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
 
 # ggplot(data = ll_df, aes(x = eastings, y = northings, fill = n_lists)) + 
 #   geom_tile() + 
@@ -57,13 +59,34 @@ ggplot(data = ll_df, aes(x = eastings, y = northings, fill = median_ll)) +
 ## end checklist length plots -------------------------------------------------
 
 ## spatial evenness of training and test datasets ----------------------------
+# spat_evenness_boxplot_bothCV <- ggplot(
+#   data = evals[!is.na(evals$simpson_training_subsampBlock), ], 
+#   aes(x = factor(block_cv_range), y = simpson_training_subsampBlock)) + 
+#   geom_boxplot() + 
+#   facet_wrap(~train_data) + 
+#   ggtitle("Spatial Evenness of training data\ncalculated at subsample block scale\nincluding cells with zero observations")
+# spat_evenness_boxplot_bothCV
+
 spat_evenness_boxplot <- ggplot(
-  data = evals[!is.na(evals$simpson_training_subsampBlock), ], 
-  aes(x = factor(block_cv_range), y = simpson_training_subsampBlock)) + 
+  data = evals[!is.na(evals$simpson_training_subsampBlock) & 
+                 evals$block_cv_range == "random" & 
+                 evals$test_data == "spat_subsamp" & 
+                 evals$metric == "AUC", ], 
+  aes(x = factor(train_data, 
+                 levels = c("raw", "spat_subsamp"), 
+                 labels = c("raw", "spatially\nunder-sampled")), 
+      y = simpson_training_subsampBlock)) + 
   geom_boxplot() + 
-  facet_wrap(~train_data) + 
-  ggtitle("Spatial Evenness of training data\ncalculated at subsample block scale\nincluding cells with zero observations")
+  facet_wrap(~species) + 
+  xlab("Training data") + ylab("Simpson's evenness") +
+  # ggtitle("Spatial Evenness of training data\ncalculated at subsample block scale\nincluding cells with zero observations") + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size), 
+        axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
 spat_evenness_boxplot
+# number of datasets used in boxplot = 
+# number of species * number of models * number of model runs (33)
+4*33
 ### end spatial evenness of datasets plot --------------------------------------
 
 ## plot results using random CV -----------------------------------------------
@@ -81,10 +104,19 @@ ggplot(data = ndet_df,
 
 
 # class balance - proportion of observations that are detections in training data
-ggplot(data = evals[!is.na(evals$proportion_detections), ], 
-       aes(x = factor(train_data), y = proportion_detections)) + 
+class_balance_boxplot <- ggplot(
+  data = evals[!is.na(evals$proportion_detections), ], 
+  aes(x = factor(train_data, 
+                 levels = c("raw", "spat_subsamp"), 
+                 labels = c("raw", "spatially\nunder-sampled")), 
+      y = proportion_detections)) + 
   geom_boxplot() + 
-  facet_wrap(~factor(species))
+  ylab("Proportion of checklists with a detection\nin training CV folds") + 
+  xlab("Training data") +
+  facet_wrap(~factor(species)) + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size), 
+        axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
 
 # predicton performance as a function of class balance
 ggplot(data = evals[!is.na(evals$proportion_detections) & 
@@ -401,8 +433,17 @@ multiplot(plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)],
 
 
 #### save plots to files -------------------------------------------------------
-ggsave("FigS1.jpg", spat_evenness_boxplot, width = 25, height = 25, 
+ggsave("FigS1.jpg", pred_cor_plot, width = 20, height = 20, 
        units = "cm", device = "jpg")
+ggsave("FigS2.jpg", class_balance_boxplot, width = 25, height = 25, 
+       units = "cm", device = "jpg")
+ggsave("FigS3.jpg", spat_evenness_boxplot, width = 25, height = 20, 
+       units = "cm", device = "jpg")
+
+
+ggsave("FigS100.jpg", list_length_map, width = 25, height = 25, 
+       units = "cm", device = "jpg")
+
 
 ggsave("FigS4.jpg", pd_plots[["Macrosternodesmus palicola"]], 
        width = 25, height = 25, units = "cm", device = "jpg")

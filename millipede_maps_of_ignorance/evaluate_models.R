@@ -110,7 +110,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "raw", cv = "block", metric = "AUC", 
+                   test_data = "raw", metric = "AUC", 
                    value = unlist(aucs), 
                    block_cv_range = unlist(block_ranges), 
                    simpson_training_hectad = unlist(simps_trains_hec), 
@@ -164,7 +164,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   test_data = "raw", metric = "Kappa", 
                    value = unlist(kp), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -197,7 +197,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "raw", cv = "block", metric = "sensitivity", 
+                   test_data = "raw", metric = "sensitivity", 
                    value = unlist(sens), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -230,7 +230,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "raw", cv = "block", metric = "specificity", 
+                   test_data = "raw", metric = "specificity", 
                    value = unlist(specif), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -265,7 +265,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "raw", cv = "block", metric = "Brier", 
+                   test_data = "raw", metric = "Brier", 
                    value = unlist(brier), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -331,7 +331,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "spat_subsamp", cv = "block", metric = "AUC", 
+                   test_data = "spat_subsamp", metric = "AUC", 
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
@@ -394,7 +394,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   test_data = "spat_subsamp", metric = "Kappa", 
                    value = unlist(kp), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -443,7 +443,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "spat_subsamp", cv = "block", 
+                   test_data = "spat_subsamp",  
                    metric = "sensitivity", 
                    value = unlist(sens), 
                    block_cv_range = unlist(block_ranges), 
@@ -491,7 +491,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "spat_subsamp", cv = "block",
+                   test_data = "spat_subsamp", 
                    metric = "specificity", 
                    value = unlist(specif), 
                    block_cv_range = unlist(block_ranges), 
@@ -540,7 +540,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "raw", 
-                   test_data = "spat_subsamp", cv = "block", metric = "Brier", 
+                   test_data = "spat_subsamp", metric = "Brier", 
                    value = unlist(brier), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -582,7 +582,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "raw", cv = "block", metric = "AUC", 
+                   test_data = "raw", metric = "AUC", 
                    value = unlist(aucs), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -616,7 +616,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "raw", cv = "block", metric = "Kappa", 
+                   test_data = "raw", metric = "Kappa", 
                    value = unlist(kp), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -648,7 +648,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "raw", cv = "block", 
+                   test_data = "raw", 
                    metric = "sensitivity", 
                    value = unlist(sens), 
                    block_cv_range = unlist(block_ranges), 
@@ -681,7 +681,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "raw", cv = "block",
+                   test_data = "raw", 
                    metric = "specificity", 
                    value = unlist(specif), 
                    block_cv_range = unlist(block_ranges), 
@@ -717,7 +717,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "raw", cv = "block", metric = "Brier", 
+                   test_data = "raw", metric = "Brier", 
                    value = unlist(brier), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -784,7 +784,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "spat_subsamp", cv = "block", metric = "AUC", 
+                   test_data = "spat_subsamp", metric = "AUC", 
                    value = unlist(lapply(aucs, FUN = function(x) {
                      lapply(x, FUN = function (y) {y$auc})})), 
                    block_cv_range = unlist(block_ranges), 
@@ -847,7 +847,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "spat_subsamp", cv = "block", metric = "Kappa", 
+                   test_data = "spat_subsamp", metric = "Kappa", 
                    value = unlist(kp), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
@@ -894,7 +894,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "spat_subsamp", cv = "block", 
+                   test_data = "spat_subsamp", 
                    metric = "sensitivity", 
                    value = unlist(sens), 
                    block_cv_range = unlist(block_ranges), 
@@ -942,7 +942,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "spat_subsamp", cv = "block",
+                   test_data = "spat_subsamp", 
                    metric = "specificity", 
                    value = unlist(specif), 
                    block_cv_range = unlist(block_ranges), 
@@ -991,7 +991,7 @@ for(i in 1:length(sp_to_fit)) {
   # put evaluation metrics for every fold into df
   ev <- data.frame(species = sp_name, model = mod_name, 
                    train_data = "spat_subsamp", 
-                   test_data = "spat_subsamp", cv = "block", metric = "Brier", 
+                   test_data = "spat_subsamp", metric = "Brier", 
                    value = unlist(brier), 
                    block_cv_range = unlist(block_ranges), 
                    proportion_detections = unlist(prop_dets))
