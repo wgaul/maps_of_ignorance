@@ -227,10 +227,10 @@ pd_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
   vi$variable <- gsub("arabl.*", "arable\nland", vi$variable)
   vi$variable <- gsub("artific.*", "artificial\nsurfaces", vi$variable)
   vi$variable <- gsub("elev", "elevation", vi$variable)
-  vi$variable <- gsub("fores.*", "forest and\nsemi-natural land", vi$variable)
+  vi$variable <- gsub("fores.*", "forest and\nsemi-natural\nland", vi$variable)
   vi$variable <- gsub("list_l.*", "checklist\nlength", vi$variable)
   vi$variable <- gsub("mean_rr", "annual\nprecipitation", vi$variable)
-  vi$variable <- gsub("mean_tn", "annual minimum\ntemperature", vi$variable)
+  vi$variable <- gsub("mean_tn", "annual\nminimum\ntemperature", vi$variable)
   vi$variable <- gsub("pastu.*", "pasture", vi$variable)
   vi$variable <- gsub("wetla.*", "wetlands", vi$variable)
   vi$variable <- gsub("day_o.*", "day of\nyear", vi$variable)
@@ -244,11 +244,12 @@ pd_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
   pdat$variable <- gsub("arabl.*", "arable\nland", pdat$variable)
   pdat$variable <- gsub("artific.*", "artificial\nsurfaces", pdat$variable)
   pdat$variable <- gsub("elev", "elevation", pdat$variable)
-  pdat$variable <- gsub("fores.*", "forest and\nsemi-natural land", 
+  pdat$variable <- gsub("fores.*", "forest and\nsemi-natural\nland", 
                         pdat$variable)
   pdat$variable <- gsub("list_l.*", "checklist\nlength", pdat$variable)
   pdat$variable <- gsub("mean_rr", "annual\nprecipitation", pdat$variable)
-  pdat$variable <- gsub("mean_tn", "annual minimum\ntemperature", pdat$variable)
+  pdat$variable <- gsub("mean_tn", "annual\nminimum\ntemperature", 
+                        pdat$variable)
   pdat$variable <- gsub("pastu.*", "pasture", pdat$variable)
   pdat$variable <- gsub("wetla.*", "wetlands", pdat$variable)
   pdat$variable <- gsub("day_o.*", "day of\nyear", pdat$variable)

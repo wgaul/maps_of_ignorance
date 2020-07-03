@@ -156,6 +156,46 @@ ggplot(data = evals[evals$metric == "Brier" &
 ### end plot results random CV all combinations -------------------------------
 ##################
 
+
+# predicton performance as a function of class balance
+ggplot(data = evals[!is.na(evals$proportion_detections) & 
+                      evals$metric == "AUC", ], 
+       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
+  geom_point() + geom_smooth() + 
+  ggtitle("AUC") + 
+  facet_wrap(~factor(species))
+
+ggplot(data = evals[!is.na(evals$proportion_detections) & 
+                      evals$metric == "Brier", ], 
+       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
+  geom_point() + geom_smooth() + 
+  ggtitle("Brier") + 
+  facet_wrap(~factor(species))
+
+ggplot(data = evals[!is.na(evals$proportion_detections) & 
+                      evals$metric == "Kappa", ], 
+       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
+  geom_point() + geom_smooth() + 
+  ggtitle("Kappa") + 
+  facet_wrap(~factor(species))
+
+ggplot(data = evals[!is.na(evals$proportion_detections) & 
+                      evals$metric == "sensitivity", ], 
+       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
+  geom_point() + geom_smooth() + 
+  ggtitle("Sensitivity") + 
+  facet_wrap(~factor(species))
+
+ggplot(data = evals[!is.na(evals$proportion_detections) & 
+                      evals$metric == "specificity", ], 
+       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
+  geom_point() + geom_smooth() + 
+  ggtitle("Specificity") + 
+  facet_wrap(~factor(species))
+
+
+
+
 #############################################
 ### plot results using 100km block CV -----------------------------------------
 ggplot(data = evals[evals$metric == "AUC" & 

@@ -5,7 +5,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 1 July 2020
+## last modified: 2 July 2020
 ##############################
 t_size <- 20
 
@@ -52,9 +52,9 @@ list_length_map <- ggplot(data = ll_df,
   theme_bw() + 
   theme(text = element_text(size = t_size))
 
-# ggplot(data = ll_df, aes(x = eastings, y = northings, fill = n_lists)) + 
-#   geom_tile() + 
-#   scale_fill_continuous(name = "Number\nof\nchecklists") + 
+# ggplot(data = ll_df, aes(x = eastings, y = northings, fill = n_lists)) +
+#   geom_tile() +
+#   scale_fill_continuous(name = "Number\nof\nchecklists") +
 #   theme_bw()
 ## end checklist length plots -------------------------------------------------
 
@@ -118,41 +118,7 @@ class_balance_boxplot <- ggplot(
   theme(text = element_text(size = t_size), 
         axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
 
-# predicton performance as a function of class balance
-ggplot(data = evals[!is.na(evals$proportion_detections) & 
-                      evals$metric == "AUC", ], 
-       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
-  geom_point() + geom_smooth() + 
-  ggtitle("AUC") + 
-  facet_wrap(~factor(species))
 
-ggplot(data = evals[!is.na(evals$proportion_detections) & 
-                      evals$metric == "Brier", ], 
-       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
-  geom_point() + geom_smooth() + 
-  ggtitle("Brier") + 
-  facet_wrap(~factor(species))
-
-ggplot(data = evals[!is.na(evals$proportion_detections) & 
-                      evals$metric == "Kappa", ], 
-       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
-  geom_point() + geom_smooth() + 
-  ggtitle("Kappa") + 
-  facet_wrap(~factor(species))
-
-ggplot(data = evals[!is.na(evals$proportion_detections) & 
-                      evals$metric == "sensitivity", ], 
-       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
-  geom_point() + geom_smooth() + 
-  ggtitle("Sensitivity") + 
-  facet_wrap(~factor(species))
-
-ggplot(data = evals[!is.na(evals$proportion_detections) & 
-                      evals$metric == "specificity", ], 
-       aes(x = proportion_detections, y = value, color = factor(train_data))) + 
-  geom_point() + geom_smooth() + 
-  ggtitle("Specificity") + 
-  facet_wrap(~factor(species))
 
 
 ## look at effect of block CV range size
@@ -254,6 +220,15 @@ vimp <- lapply(vimp, FUN = function(x) {
 })
 vimp <- bind_rows(vimp)
 
+# make environmental variable names pretty
+vimp$variable <- gsub("_", " ", vimp$variable)
+vimp$variable <- gsub("l2", "", vimp$variable)
+vimp$variable <- gsub("l1", "", vimp$variable)
+vimp$variable <- gsub("mean rr", "precipitation", vimp$variable)
+vimp$variable <- gsub("mean tn", "minimum temperature", vimp$variable)
+vimp$variable <- gsub("arable", "arable land", vimp$variable)
+vimp$variable <- gsub(" doy", "(day of year)", vimp$variable)
+
 vimp_plots_best <- lapply(sp_to_fit, FUN = function(x, v_df) {
   dat <- v_df[v_df$cv == "random" & v_df$species == x, ]
   dat <- dat[order(dat$MeanDecreaseGini, decreasing = FALSE), ]
@@ -263,12 +238,17 @@ vimp_plots_best <- lapply(sp_to_fit, FUN = function(x, v_df) {
              y = MeanDecreaseGini)) + 
     geom_bar(stat = "identity") + 
     coord_flip() + 
-    xlab("") + 
+    ylab("Mean decrease Gini index") + xlab("") + 
     ggtitle(dat$species[1]) +
     # ggtitle(paste0(dat$species[1], "\n", dat$model[1], "\n", 
     #                "CV: ", dat$cv[1], 
     #                " analysis resolution: ", analysis_resolution)) + 
-    facet_wrap(~factor(train_dat), scales = "free")
+    facet_wrap(~factor(train_dat, 
+                       levels = c("raw", "spat_subsamp"), 
+                       labels = c("raw", "spatially\nunder-\nsampled")), 
+               scales = "free") + 
+    theme_bw() + 
+    theme(text = element_text(size = 0.7*t_size))
 }, v_df = vimp)
 
 # for(i in 1:length(vimp_plots_best)) print(vimp_plots_best[i])
@@ -308,7 +288,7 @@ for(i in 1:length(vimp_plots)) print(vimp_plots[i])
 ### plot partial dependence ---------------------------------------------------
 # plot pd from raw and spatially under-sampled training data
 ## make pd plots using random CV, spatially under-sampled training data, and
-## the best model
+## the most complex model
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
 vimp <- vimp[grepl("var_import.*", vimp)]
@@ -340,6 +320,9 @@ pd <- lapply(pd, FUN = function(x) {
     filter(variable != "cos_doy" & variable != "sin_doy")
 })
 pd <- bind_rows(pd)
+# make eastings and northings be in km instead of m
+pd$x[pd$variable == "eastings" | pd$variable == "northings"] <- 
+  pd$x[pd$variable == "eastings" | pd$variable == "northings"] / 1000
 
 # make plots
 pd_raw_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
@@ -347,11 +330,39 @@ pd_raw_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
   vi <- vi[order(vi$MeanDecreaseGini, decreasing = T), ]
   vi <- vi[-which(grepl(".*doy", vi$variable))[2], ]
   vi$variable <- gsub(".*doy", "day_of_year", vi$variable)
-  vi$variable <- factor(vi$variable, levels = vi$variable,
+  # make better variable names
+  vi$variable <- gsub("arabl.*", "arable\nland", vi$variable)
+  vi$variable <- gsub("artific.*", "artificial\nsurfaces", vi$variable)
+  vi$variable <- gsub("elev", "elevation", vi$variable)
+  vi$variable <- gsub("fores.*", "forest and\nsemi-natural\nland", vi$variable)
+  vi$variable <- gsub("list_l.*", "checklist\nlength", vi$variable)
+  vi$variable <- gsub("mean_rr", "annual\nprecipitation", vi$variable)
+  vi$variable <- gsub("mean_tn", "annual\nminimum\ntemperature", vi$variable)
+  vi$variable <- gsub("pastu.*", "pasture", vi$variable)
+  vi$variable <- gsub("wetla.*", "wetlands", vi$variable)
+  vi$variable <- gsub("day_o.*", "day of\nyear", vi$variable)
+  
+  # make variable column a factor
+  vi$variable <- factor(vi$variable, levels = vi$variable, 
                         ordered = T)
-
+  
   pdat <- dat[dat$species == x, ] # get pd data for this sp.
+  # make better variable names
+  pdat$variable <- gsub("arabl.*", "arable\nland", pdat$variable)
+  pdat$variable <- gsub("artific.*", "artificial\nsurfaces", pdat$variable)
+  pdat$variable <- gsub("elev", "elevation", pdat$variable)
+  pdat$variable <- gsub("fores.*", "forest and\nsemi-natural\nland", 
+                        pdat$variable)
+  pdat$variable <- gsub("list_l.*", "checklist\nlength", pdat$variable)
+  pdat$variable <- gsub("mean_rr", "annual\nprecipitation", pdat$variable)
+  pdat$variable <- gsub("mean_tn", "annual\nminimum\ntemperature", 
+                        pdat$variable)
+  pdat$variable <- gsub("pastu.*", "pasture", pdat$variable)
+  pdat$variable <- gsub("wetla.*", "wetlands", pdat$variable)
+  pdat$variable <- gsub("day_o.*", "day of\nyear", pdat$variable)
+  # make variable column a factor
   pdat$variable <- factor(pdat$variable, levels = levels(vi$variable))
+  
 
   ggplot(data = pdat,
          aes(x = x, y = y)) +
@@ -360,30 +371,13 @@ pd_raw_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
     facet_wrap(~variable, scales = "free_x") +
     ylab("Partial dependence") +
     xlab("Variable value") +
-    ggtitle(pdat$species[1])
+    ggtitle(pdat$species[1]) + 
+    theme_bw() + 
+    theme(text = element_text(size = t_size), 
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+  
 }, dat = pd[pd$train_data == "raw" & pd$cv == "random", ],
 vimp = vimp[vimp$train_dat == "spat_subsamp" & vimp$cv == "random", ])
-
-pd_to_print <- list()
-for(i in 1:length(pd_plots)) {
-  # add plots from raw training data
-  if(names(pd_raw_plots)[i] %in% c("Macrosternodesmus palicola",
-                               "Ommatoiulus sabulosus",
-                               "Cylindroiulus punctatus")) {
-    pd_to_print[[length(pd_to_print) + 1]] <- pd_raw_plots[[i]]
-    names(pd_to_print)[length(pd_to_print)] <- paste0(names(pd_raw_plots)[i],
-                                                      " raw")
-  }
-  # add plots from spatially subsampled training data
-  if(names(pd_plots)[i] %in% c("Macrosternodesmus palicola",
-                               "Ommatoiulus sabulosus",
-                               "Cylindroiulus punctatus")) {
-    pd_to_print[[length(pd_to_print) + 1]] <- pd_plots[[i]]
-    names(pd_to_print)[length(pd_to_print)] <- names(pd_plots)[i]
-  }
-}
-
-multiplot(plotlist = pd_to_print, layout = matrix(c(1:6), nrow = 3, byrow = T))
 ### end plot partial dependence ---------------------------------------------
 
 ### plot predictions with standardized list length ----------------------------
@@ -396,36 +390,100 @@ stpred <- stpred[grepl(paste0(".*", mods_for_pd_plots, ".*", collapse = "|"),
 names(stpred) <- gsub("standard.*tions_", "", stpred)
 names(stpred) <- gsub(".rds", "", names(stpred))
 
-# plot average of predictions from all 5 folds (so 4 predictions will be to
-# training data, one prediction to test data in each grid cell)
-prediction_plots <- mapply(FUN = function(x, nm, mill) {
-  dat <- readRDS(paste0("./saved_objects/", x)) # load object
-  # map only predictions from random CV
-  dat <- dat[dat$cv == "random", ] # use only random CV results
-  sp <- gsub(".*Samp_", "", nm) # get species name
-  sp <- gsub("1000.*", "", sp)
-  sp <- gsub("_", " ", sp)
-  mod <- gsub("_SubSamp.*|_noSub.*", "", nm) # get model name
-  train_data <- gsub("^.*_rf_", "", nm) # get training data type name
-  train_data <- gsub("_.*_.*$", "", train_data)
-  
-  # get average predictions for each grid cell (averaging over all folds)
-  dat <- group_by(dat, en) %>%
-    summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-              eastings = mean(eastings), northings = mean(northings))
-  ggplot() + 
-    geom_tile(data = dat, 
-              aes(x = eastings, y = northings, fill = mean_prediction)) + 
-    ggtitle(sp) + 
-    scale_fill_continuous(name = "") + 
-    theme_bw()
-}, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
-
-multiplot(plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
-          layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
-multiplot(plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)], 
-          layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
+# # plot average of predictions from all 5 folds (so 4 predictions will be to
+# # training data, one prediction to test data in each grid cell)
+# prediction_plots <- mapply(FUN = function(x, nm, mill) {
+#   dat <- readRDS(paste0("./saved_objects/", x)) # load object
+#   # map only predictions from random CV
+#   dat <- dat[dat$cv == "random", ] # use only random CV results
+#   sp <- gsub(".*Samp_", "", nm) # get species name
+#   sp <- gsub("1000.*", "", sp)
+#   sp <- gsub("_", " ", sp)
+#   mod <- gsub("_SubSamp.*|_noSub.*", "", nm) # get model name
+#   train_data <- gsub("^.*_rf_", "", nm) # get training data type name
+#   train_data <- gsub("_.*_.*$", "", train_data)
+#   
+#   # get average predictions for each grid cell (averaging over all folds)
+#   dat <- group_by(dat, en) %>%
+#     summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+#               eastings = mean(eastings), northings = mean(northings))
+#   ggplot() + 
+#     geom_tile(data = dat, 
+#               aes(x = eastings, y = northings, fill = mean_prediction)) + 
+#     ggtitle(sp) + 
+#     scale_fill_continuous(name = "") + 
+#     theme_bw()
+# }, stpred, names(stpred), MoreArgs = list(mill = mill), SIMPLIFY = FALSE)
+# 
+# multiplot(plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
+#           layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
+# multiplot(plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)], 
+#           layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T))
 # for(i in 1:length(prediction_plots)) print(prediction_plots[i])
+
+## using code from main text
+sp_map_list <- list()
+for(i in 1:length(sp_to_fit)) {
+  sn <- sp_to_fit[[i]]
+  # load standardized predictions
+  sp_preds <- list(
+    raw = readRDS(
+      paste0("./saved_objects/standard_predictions_env_spat_ll_rf_noSubSamp_", 
+             gsub(" ", "_", sn), "1000.rds")), 
+    spat_subsamp = readRDS(
+      paste0("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_", 
+             gsub(" ", "_", sn), "1000.rds")))
+  
+  sp_maps <- lapply(sp_preds, function(dat, annot) {
+    # map only predictions from random CV
+    dat <- dat[dat$cv == "random", ] # use only random CV results
+    imod <- "env_spat_ll_rf"
+    
+    # get average predictions for each grid cell (averaging over all folds)
+    dat <- group_by(dat, en) %>%
+      summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+                eastings = mean(eastings), northings = mean(northings))
+    
+    ggplot() + 
+      geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+      geom_tile(data = dat, 
+                aes(x = eastings, y = northings, fill = mean_prediction)) +
+      ylab("") + xlab("Longitude") + 
+      guides(fill = guide_colorbar(title = "", 
+                                   barwidth = unit(0.4 * t_size, "points"))) +
+      theme_bw() + 
+      theme(text = element_text(size = 0.5*t_size), 
+            axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+            plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+  }, annot = annot)
+  
+  ## add raw observations for this sp
+  # get species observations from mill_wide
+  sobs <- data.frame(mill_wide)[, names(mill_wide) == sn]
+  
+  sp_map_list[[length(sp_map_list) + 1]] <- ggplot() + 
+    geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+    geom_sf(
+      data = st_as_sf(mill_wide[sobs == 0, ]), 
+      color = "light grey", size = 0.02*t_size) + 
+    geom_sf(data = st_as_sf(mill_wide[sobs > 0, ]), 
+            color = "dark orange", size = 0.02*t_size) + 
+    geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+    geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+    geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+                 arrow = arrow(length = unit(0.1, "npc"))) + 
+    ylab("Latitude") + xlab("Longitude") + 
+    ggtitle("(a)", subtitle = gsub(" ", "\n", sn)) +
+    theme_bw() + 
+    theme(text = element_text(size = 0.5*t_size), 
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+          plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
+  
+  ## add standardized predictions from raw data
+  sp_map_list[[length(sp_map_list) + 1]] <- sp_maps[[1]] + ggtitle("(b)")
+  ## add standardized predictions from under-sampled data
+  sp_map_list[[length(sp_map_list) + 1]] <- sp_maps[[2]] + ggtitle("(c)")
+}
 ### end plot standardized predictions -----------------------------------------
 
 
@@ -439,18 +497,57 @@ ggsave("FigS2.jpg", class_balance_boxplot, width = 25, height = 25,
        units = "cm", device = "jpg")
 ggsave("FigS3.jpg", spat_evenness_boxplot, width = 25, height = 20, 
        units = "cm", device = "jpg")
+ggsave("FigS4.jpg", multiplot(plotlist = vimp_plots_best, cols = 2), 
+       width = 25, height = 25, units = "cm", device = "jpg")
 
 
 ggsave("FigS100.jpg", list_length_map, width = 25, height = 25, 
        units = "cm", device = "jpg")
 
 
-ggsave("FigS4.jpg", pd_plots[["Macrosternodesmus palicola"]], 
-       width = 25, height = 25, units = "cm", device = "jpg")
-ggsave("FigS5.jpg", pd_plots[["Boreoiulus tenuis"]], 
-       width = 25, height = 25, units = "cm", device = "jpg")
-ggsave("FigS6.jpg", pd_plots[["Blaniulus guttulatus"]], 
-       width = 25, height = 25, units = "cm", device = "jpg")
+ggsave("FigSPD1.jpg", pd_raw_plots[["Macrosternodesmus palicola"]] + 
+       pd_plots[["Macrosternodesmus palicola"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+ggsave("FigSPD2.jpg", pd_raw_plots[["Boreoiulus tenuis"]] + 
+         pd_plots[["Boreoiulus tenuis"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+ggsave("FigSPD3.jpg", pd_raw_plots[["Ommatoiulus sabulosus"]] + 
+         pd_plots[["Ommatoiulus sabulosus"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+ggsave("FigSPD4.jpg", pd_raw_plots[["Blaniulus guttulatus"]] + 
+         pd_plots[["Blaniulus guttulatus"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+ggsave("FigSPD5.jpg", pd_raw_plots[["Glomeris marginata"]] + 
+         pd_plots[["Glomeris marginata"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+ggsave("FigSPD6.jpg", pd_raw_plots[["Cylindroiulus punctatus"]] + 
+         pd_plots[["Cylindroiulus punctatus"]] + 
+         plot_annotation(tag_levels = "a") & 
+         theme(text = element_text(size = 0.8*t_size)), 
+       width = 28, height = 20, units = "cm", device = "jpg")
+
+ggsave("FigSP1.jpg", sp_map_list[[1]] + sp_map_list[[2]] + sp_map_list[[3]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
+ggsave("FigSP2.jpg", sp_map_list[[4]] + sp_map_list[[5]] + sp_map_list[[6]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
+ggsave("FigSP3.jpg", sp_map_list[[7]] + sp_map_list[[8]] + sp_map_list[[9]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
+ggsave("FigSP4.jpg", sp_map_list[[10]] + sp_map_list[[11]] + sp_map_list[[12]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
+ggsave("FigSP5.jpg", sp_map_list[[13]] + sp_map_list[[14]] + sp_map_list[[15]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
+ggsave("FigSP6.jpg", sp_map_list[[16]] + sp_map_list[[17]] + sp_map_list[[18]], 
+       width = 25, height = 25/3, units = "cm", device = "jpg")
 
 ggsave("FigS8.jpg", multiplot(
   plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
