@@ -111,9 +111,10 @@ class_balance_boxplot <- ggplot(
                  labels = c("raw", "spatially\nunder-sampled")), 
       y = proportion_detections)) + 
   geom_boxplot() + 
+  facet_wrap(~species) + 
   ylab("Proportion of checklists with a detection\nin training CV folds") + 
   xlab("Training data") +
-  facet_wrap(~factor(species)) + 
+  geom_abline(slope = 0, intercept = 0.5, linetype = "dashed") + 
   theme_bw() + 
   theme(text = element_text(size = t_size), 
         axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
@@ -487,6 +488,39 @@ for(i in 1:length(sp_to_fit)) {
 ### end plot standardized predictions -----------------------------------------
 
 
+### plot DOY demonstration to show transformed variables -----------------------
+smod <- readRDS("./saved_objects/env_spat_ll_rf_SubSamp_fits_Macrosternodesmus_palicola1000.rds")
+doy_dat <- data.frame(newdata)
+# add doy 1 to the data, and add more days 
+doy1 <- doy_dat[doy_dat$day_of_year == 20, ]
+doy1$day_of_year <- 1 
+doy1$cos_doy <- cos((2*pi*doy1$day_of_year) / 365)
+doy1$sin_doy <- sin((2*pi*doy1$day_of_year) / 365)
+doy_copy <- doy_dat
+doy_copy$day_of_year <- doy_copy$day_of_year - 10
+doy_copy$cos_doy <- cos((2*pi*doy_copy$day_of_year) / 365)
+doy_copy$sin_doy <- sin((2*pi*doy_copy$day_of_year) / 365)
+
+doy_dat <- bind_rows(doy_dat, doy1, doy_copy) # add additional days
+# get standardized predictions to each grid cell on each day
+doy_dat$prediction <- predict(smod[[1]][[1]]$m, newdata=doy_dat, 
+                              type = "prob")[, "1"]
+
+doy_dat <- group_by(doy_dat, day_of_year, sin_doy, cos_doy) %>%
+  summarise(mean_pred = mean(prediction))
+
+doy_plot <- ggplot(data = doy_dat, 
+                   aes(x = sin_doy, y = cos_doy, color = day_of_year, 
+                       size = mean_pred)) + 
+  geom_point() + 
+  xlab("Dsin") + ylab("Dcos") +
+  scale_color_continuous(name = "Day of\nyear") + 
+  scale_size_continuous("Mean predicted\nprobability\nof being\nrecorded") + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size))
+doy_plot
+rm(doy1, smod)
+### end plot DOY demonstration ------------------------------------------------
 
 
 
@@ -501,8 +535,11 @@ ggsave("FigS4.jpg", multiplot(plotlist = vimp_plots_best, cols = 2),
        width = 25, height = 25, units = "cm", device = "jpg")
 
 
-ggsave("FigS100.jpg", list_length_map, width = 25, height = 25, 
+ggsave("FigS100.jpg", list_length_map, width = 20, height = 20, 
        units = "cm", device = "jpg")
+ggsave("FigS101.jpg", doy_plot, width = 20, height = 20, 
+       units = "cm", device = "jpg")
+
 
 
 ggsave("FigSPD1.jpg", pd_raw_plots[["Macrosternodesmus palicola"]] + 
@@ -548,12 +585,3 @@ ggsave("FigSP5.jpg", sp_map_list[[13]] + sp_map_list[[14]] + sp_map_list[[15]],
        width = 25, height = 25/3, units = "cm", device = "jpg")
 ggsave("FigSP6.jpg", sp_map_list[[16]] + sp_map_list[[17]] + sp_map_list[[18]], 
        width = 25, height = 25/3, units = "cm", device = "jpg")
-
-ggsave("FigS8.jpg", multiplot(
-  plotlist = prediction_plots[c(5, 2, 6, 11, 8, 12)], 
-  layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T)), 
-  width = 25, height = 25, units = "cm", device = "jpg")
-ggsave("FigS9.jpg", multiplot(
-  plotlist = prediction_plots[c(1, 4, 3, 7, 10, 9)], 
-  layout = matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = T)), 
-  width = 25, height = 25, units = "cm", device = "jpg")
