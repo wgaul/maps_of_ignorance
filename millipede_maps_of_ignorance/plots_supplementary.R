@@ -200,11 +200,11 @@ ggplot(data = evals_median_blockCV,
                         begin = 0, end = 0.8) + 
   theme_bw() + 
   theme(text = element_text(size = t_size))
-## end plot performance for best model - block CV ------------------------------
+## end plot performance for best model - block CV -----------------------------
 
 
 
-### plot variable importance ---------------------------------------------------
+### plot variable importance --------------------------------------------------
 ### plot variable importance only for best model -----------------------
 # read in variable importance results
 vimp <- list.files("./saved_objects/")
@@ -283,7 +283,7 @@ vimp_plots <- lapply(vimp, FUN = function(x) {
 })
 
 for(i in 1:length(vimp_plots)) print(vimp_plots[i])
-### end plot variable importance -----------------------------------------------
+### end plot variable importance ----------------------------------------------
 
 
 ### plot partial dependence ---------------------------------------------------
@@ -435,34 +435,65 @@ for(i in 1:length(sp_to_fit)) {
       paste0("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_", 
              gsub(" ", "_", sn), "1000.rds")))
   
-  sp_maps <- lapply(sp_preds, function(dat, annot) {
-    # map only predictions from random CV
-    dat <- dat[dat$cv == "random", ] # use only random CV results
-    imod <- "env_spat_ll_rf"
-    
-    # get average predictions for each grid cell (averaging over all folds)
-    dat <- group_by(dat, en) %>%
-      summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-                eastings = mean(eastings), northings = mean(northings))
-    
-    ggplot() + 
-      geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
-      geom_tile(data = dat, 
-                aes(x = eastings, y = northings, fill = mean_prediction)) +
-      ylab("") + xlab("Longitude") + 
-      guides(fill = guide_colorbar(title = "", 
+  if(bootstrap_mean_prediction) {
+    sp_ci_dat <- lapply(sp_preds, function(dat) {
+      # map only predictions from random CV
+      dat <- dat[dat$cv == "random", ] # use only random CV results
+      imod <- "env_spat_ll_rf"
+      
+      # get average predictions for each grid cell (averaging over all folds)
+      dat <- group_by(dat, en) %>%
+        summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+                  ci_l = ci_low(mean_pred), 
+                  ci_h = ci_high(mean_pred),
+                  ci_width = ci_width(mean_pred), 
+                  eastings = mean(eastings), northings = mean(northings))
+      dat
+    })
+    # save bootstrap results
+    saveRDS(sp_ci_dat, file = paste0("./mean_prediction_and_CIs_", 
+                                     gsub(" ", "_", sn), ".rds"))
+  } else (sp_ci_dat <- readRDS(paste0("./mean_prediction_and_CIs_", 
+                                      gsub(" ", "_", sn), ".rds")))
+  
+  maps_prediction <- lapply(
+    sp_ci_dat, function(dat, annot, ir_TM75) {
+      # map mean predictions
+      ggplot() + 
+        geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+        geom_tile(data = dat, 
+                  aes(x = eastings, y = northings, fill = mean_prediction)) +
+        ylab("") + xlab("Longitude") + 
+        guides(fill = guide_colorbar(title = "", 
+                                     barwidth = unit(0.4 * t_size, 
+                                                     "points"))) +
+        theme_bw() + 
+        theme(text = element_text(size = 0.5*t_size), 
+              axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+              plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+    }, annot = annot, ir_TM75 = ir_TM75)
+  
+  maps_ciWidth <- lapply(sp_ci_dat, function(dat, annot, ir_TM75) {
+    # map width of 95% CI
+    ggplot() +
+      geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
+      geom_tile(data = dat,
+                aes(x = eastings, y = northings, fill = ci_width)) +
+      ylab("") + xlab("Longitude") +
+      scale_fill_gradient(low = "white", high = "red") +  
+      guides(fill = guide_colorbar(title = "",
                                    barwidth = unit(0.4 * t_size, "points"))) +
-      theme_bw() + 
-      theme(text = element_text(size = 0.5*t_size), 
-            axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
+      theme_bw() +
+      theme(text = element_text(size = 0.5*t_size),
+            axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1),
             plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
-  }, annot = annot)
+  }, annot = annot, ir_TM75 = ir_TM75)
   
   ## add raw observations for this sp
   # get species observations from mill_wide
   sobs <- data.frame(mill_wide)[, names(mill_wide) == sn]
   
-  sp_map_list[[length(sp_map_list) + 1]] <- ggplot() + 
+  map_observed <- ggplot() + 
     geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
     geom_sf(
       data = st_as_sf(mill_wide[sobs == 0, ]), 
@@ -480,10 +511,21 @@ for(i in 1:length(sp_to_fit)) {
           axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
           plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
   
-  ## add standardized predictions from raw data
-  sp_map_list[[length(sp_map_list) + 1]] <- sp_maps[[1]] + ggtitle("(b)")
-  ## add standardized predictions from under-sampled data
-  sp_map_list[[length(sp_map_list) + 1]] <- sp_maps[[2]] + ggtitle("(c)")
+  # combine maps in one ordered list
+  sp_maps <- list(observed = map_observed, 
+                  raw_pred = maps_prediction$raw, 
+                  spat_subsamp_pred = maps_prediction$spat_subsamp, 
+                  raw_ciWidth = maps_ciWidth$raw, 
+                  spat_subsamp_ciWidth = maps_ciWidth$spat_subsamp)
+  # add titles
+  sp_maps[[1]] <- sp_maps[[1]] + ggtitle("(a)")
+  sp_maps[[2]] <- sp_maps[[2]] + ggtitle("(b)")
+  sp_maps[[3]] <- sp_maps[[3]] + ggtitle("(c)")
+  sp_maps[[4]] <- sp_maps[[4]] + ggtitle("(d)")
+  sp_maps[[5]] <- sp_maps[[5]] + ggtitle("(e)")
+  
+  # put maps for this species into sp_map_list
+  sp_map_list[[length(sp_map_list) + 1]] <- sp_maps
 }
 ### end plot standardized predictions -----------------------------------------
 
@@ -573,12 +615,19 @@ ggsave("FigSPD6.jpg", pd_raw_plots[["Cylindroiulus punctatus"]] +
          theme(text = element_text(size = 0.8*t_size)), 
        width = 28, height = 20, units = "cm", device = "jpg")
 
-ggsave("FigSP1.jpg", sp_map_list[[1]] + sp_map_list[[2]] + sp_map_list[[3]], 
+ggsave("FigSP1.jpg", sp_map_list[[1]][[1]] + sp_map_list[[1]][[2]] + 
+         sp_map_list[[1]][[3]] + 
+         blank_plot + sp_map_list[[1]][[4]] + sp_map_list[[1]][[5]], 
        width = 25, height = 25/3, units = "cm", device = "jpg")
-ggsave("FigSP2.jpg", sp_map_list[[4]] + sp_map_list[[5]] + sp_map_list[[6]], 
+ggsave("FigSP2.jpg", sp_map_list[[2]][[1]] + sp_map_list[[2]][[2]] + 
+         sp_map_list[[2]][[3]] + 
+         blank_plot + sp_map_list[[2]][[4]] + sp_map_list[[2]][[5]], 
        width = 25, height = 25/3, units = "cm", device = "jpg")
-ggsave("FigSP3.jpg", sp_map_list[[7]] + sp_map_list[[8]] + sp_map_list[[9]], 
+ggsave("FigSP3.jpg", sp_map_list[[3]][[1]] + sp_map_list[[3]][[2]] + 
+         sp_map_list[[3]][[3]] + 
+         blank_plot + sp_map_list[[3]][[4]] + sp_map_list[[3]][[5]], 
        width = 25, height = 25/3, units = "cm", device = "jpg")
+# TODO 29 Sep.  If above works, change remainings saves to nested list
 ggsave("FigSP4.jpg", sp_map_list[[10]] + sp_map_list[[11]] + sp_map_list[[12]], 
        width = 25, height = 25/3, units = "cm", device = "jpg")
 ggsave("FigSP5.jpg", sp_map_list[[13]] + sp_map_list[[14]] + sp_map_list[[15]], 

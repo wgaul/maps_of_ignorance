@@ -22,6 +22,7 @@ run_rf <- F
 make_spatial_blocks <- F # takes a few minutes. Set to T for final run
 get_partial_dependence <- F # calculate partial dependence (time consuming)
 run_evals <- F
+bootstrap_mean_prediction <- F # bootstrap mean prediction for each grid cell
 
 analysis_resolution <- 1000 # analysis resolution (10000 or 1000 m rid squares)
 n_folds <- 3 # number of cross-validation folds to use

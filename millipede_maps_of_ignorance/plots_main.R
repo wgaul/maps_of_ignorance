@@ -9,9 +9,10 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 1 July 2020
+## last modified: 29 Sep 2020
 ##############################
 library(patchwork)
+library(boot)
 try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
        mill_spat))
 t_size <- 20
@@ -121,7 +122,8 @@ auc_all_models_plot <- ggplot(
                  "\ncoordinates +\nseason +\nlist length\n",
                  "\nenvironment +\nseason +\nlist length\n", 
                  "\nenvironment + \ncoordinates +\nseason +\nlist length")))) + 
-  geom_boxplot(size = 0.9) + 
+  # geom_violin(draw_quantiles = 0.5, size = 0.9) + 
+  geom_boxplot(size = 0.9) +
   facet_wrap(~factor(species, 
                      levels = c("Macrosternodesmus palicola", 
                                 "Boreoiulus tenuis", 
@@ -139,6 +141,70 @@ auc_all_models_plot <- ggplot(
         axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1))
 auc_all_models_plot
 ### end AUC boxplots ----------------------------------------------------------
+
+### AUC difference plots -----------------------------------------------------
+# calculate mean and se of mean for AUC
+auc_summary <- evals[evals$metric == "AUC" & 
+                       as.character(evals$block_cv_range) == "random" & 
+                       as.character(evals$test_data) == "spat_subsamp", ]
+auc_summary <- group_by(auc_summary, species, model, train_data) %>%
+  summarise(mean_auc = mean(value)) %>%
+  pivot_wider(names_from = train_data, values_from = mean_auc) %>%
+  mutate(change_after_subsampling = spat_subsamp - raw)
+
+auc_means_plot <- ggplot(
+  data = auc_summary, 
+  aes(
+    x = factor(species, 
+               levels = c("Macrosternodesmus palicola", 
+                          "Boreoiulus tenuis", 
+                          "Ommatoiulus sabulosus", 
+                          "Blaniulus guttulatus", 
+                          "Glomeris marginata", 
+                          "Cylindroiulus punctatus"),
+               labels = c("M. palicola", 
+                          "Boreoiulus\ntenuis", 
+                          "O. sabulosus", 
+                          "Blaniulus\nguttulatus", 
+                          "G. marginata", 
+                          "C. punctatus")), 
+    y = change_after_subsampling, 
+    color = factor(
+      model, 
+      levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
+                 "env_spat_ll_rf"), 
+      labels = c("\nseason +\nlist length\n", 
+                 "\ncoordinates +\nseason +\nlist length\n",
+                 "\nenvironment +\nseason +\nlist length\n", 
+                 "\nenvironment + \ncoordinates +\nseason +\nlist length")), 
+    shape = factor(
+      model, 
+      levels = c("day_ll_rf", "spat_ll_rf","env_ll_rf", 
+                 "env_spat_ll_rf"), 
+      labels = c("\nseason +\nlist length\n", 
+                 "\ncoordinates +\nseason +\nlist length\n",
+                 "\nenvironment +\nseason +\nlist length\n", 
+                 "\nenvironment + \ncoordinates +\nseason +\nlist length")))) + 
+  geom_point(size = t_size/7) + 
+  # facet_wrap(~factor(species, 
+  #                    levels = c("Macrosternodesmus palicola", 
+  #                               "Boreoiulus tenuis", 
+  #                               "Ommatoiulus sabulosus", 
+  #                               "Blaniulus guttulatus", 
+  #                               "Glomeris marginata", 
+  #                               "Cylindroiulus punctatus"),
+  #                    labels = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)"))) + 
+  xlab("Species") + 
+  ylab("Change in AUC") + 
+  scale_color_viridis_d(name = "Model", #option = "magma", 
+                        begin = 0.1, end = 0.8, direction = -1) + 
+  scale_shape(name = "Model") + 
+  geom_abline(slope = 0, intercept = 0, linetype = "dashed") + 
+  theme_bw() + 
+  theme(text = element_text(size = t_size), 
+        axis.text.x = element_text(angle = 55, hjust = 1, vjust = 1))
+auc_means_plot
+### end AUC difference plots --------------------------------------------------
 
 ## plot all performance metrics for best model --------------------------------
 evals_median_best <- filter(evals, model == "env_spat_ll_rf" & 
@@ -283,31 +349,91 @@ rm(pd, vimp)
 osab_preds <- list(raw = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_noSubSamp_Ommatoiulus_sabulosus1000.rds"), 
                    spat_subsamp = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_Ommatoiulus_sabulosus1000.rds"))
 
-osab_maps <- lapply(osab_preds, function(dat, annot) {
-  # map only predictions from random CV
-  dat <- dat[dat$cv == "random", ] # use only random CV results
-  sp <- "Ommatoiulus sabulosus"
-  mod <- "env_spat_ll_rf"
-  
-  # get average predictions for each grid cell (averaging over all folds)
-  dat <- group_by(dat, en) %>%
-    summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-              eastings = mean(eastings), northings = mean(northings))
+# # define function to get 95% bootstrap CI of prediction mean
+# ci_width <- function(x) {
+#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
+#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
+#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
+#   # calculate width of bca CI
+#   width <- tryCatch(ci$bca[5] - ci$bca[4], error = function(x) NA) 
+#   width
+# }
+# ci_low <- function(x) {
+#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
+#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
+#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
+#   tryCatch(ci$bca[4], error = function(x) NA) # CI lower bound
+# }
+# ci_high <- function(x) {
+#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
+#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
+#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
+#   tryCatch(ci$bca[5], error = function(x) NA) # CI upper bound
+# }
+se <- function(x) sd(x)/sqrt(length(x))
 
-  ggplot() + 
-    geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
-    geom_tile(data = dat, 
-              aes(x = eastings, y = northings, fill = mean_prediction)) +
-    ylab("") + xlab("Longitude") + 
-    guides(fill = guide_colorbar(title = "", 
-                               barwidth = unit(0.4 * t_size, "points"))) +
-    theme_bw() + 
-    theme(text = element_text(size = 0.5*t_size), 
+if(bootstrap_mean_prediction) {
+## calculate mean predictions, 95% CI, and width of CI for predictions in each 
+# grid cell
+  osab_ciWidth_data <- lapply(osab_preds, function(dat) {
+    # get only width of 95% CI for predictions from random CV
+    dat <- dat[dat$cv == "random", ] # use only random CV results
+    sp <- "Ommatoiulus sabulosus"
+    mod <- "env_spat_ll_rf"
+    
+    # get 95% CI for mean prediction for each grid cell 
+    # (averaging over all folds)
+    # dat <- group_by(dat, en) %>%
+    #   summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+    #             ci_l = ci_low(mean_pred), 
+    #             ci_h = ci_high(mean_pred),
+    #             ci_width = ci_width(mean_pred), 
+    #             eastings = mean(eastings), northings = mean(northings))
+    
+    dat <- group_by(dat, en) %>%
+      summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+                se = se(mean_pred), 
+                eastings = mean(eastings), northings = mean(northings))
+    dat
+  })
+  # save bootstrap results
+  saveRDS(osab_ciWidth_data, file = "./saved_objects/mean_prediction_and_CIs_Ommatoiulus_sabulosus.rds")
+} else (osab_ciWidth_data <- readRDS("./saved_objects/mean_prediction_and_CIs_Ommatoiulus_sabulosus.rds"))
+
+osab_maps_ciWidth <- lapply(osab_ciWidth_data, function(dat, annot, ir_TM75) {
+  # map width of 95% CI
+  ggplot() +
+    geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
+    geom_tile(data = dat,
+              aes(x = eastings, y = northings, fill = ci_width)) +
+    ylab("") + xlab("Longitude") +
+    scale_fill_gradient(low = "white", high = "red") +  
+    guides(fill = guide_colorbar(title = "",
+                                 barwidth = unit(0.4 * t_size, "points"))) +
+    theme_bw() +
+    theme(text = element_text(size = 0.5*t_size),
+          axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1),
+          plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+}, annot = annot, ir_TM75 = ir_TM75)
+
+osab_maps_prediction <- lapply(
+  osab_ciWidth_data, function(dat, annot, ir_TM75) {
+    # map mean predictions
+    ggplot() + 
+      geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+      geom_tile(data = dat, 
+                aes(x = eastings, y = northings, fill = mean_prediction)) +
+      ylab("") + xlab("Longitude") + 
+      guides(fill = guide_colorbar(title = "", 
+                                   barwidth = unit(0.4 * t_size, "points"))) +
+      theme_bw() + 
+      theme(text = element_text(size = 0.5*t_size), 
           axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
           plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
-}, annot = annot)
+}, annot = annot, ir_TM75 = ir_TM75)
 
-osab_maps[[3]] <- ggplot() + 
+# map observed checklists
+osab_map_observed <- ggplot() + 
   geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
   geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 0, ]), 
           color = "light grey", size = 0.02*t_size) + 
@@ -322,15 +448,25 @@ osab_maps[[3]] <- ggplot() +
   theme(text = element_text(size = 0.5*t_size), 
         axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
         plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
-# re-order maps
-osab_maps <- list(observed = osab_maps[[3]], raw = osab_maps[[1]], 
-                  spat_subsamp = osab_maps[[2]])
+
+# combine maps in one ordered list
+osab_maps <- list(observed = osab_map_observed, 
+                  raw_pred = osab_maps_prediction$raw, 
+                  spat_subsamp_pred = osab_maps_prediction$spat_subsamp, 
+                  raw_ciWidth = osab_maps_ciWidth$raw, 
+                  spat_subsamp_ciWidth = osab_maps_ciWidth$spat_subsamp)
+
 # add titles
 osab_maps[[1]] <- osab_maps[[1]] + ggtitle("(a)")
 osab_maps[[2]] <- osab_maps[[2]] + ggtitle("(b)")
 osab_maps[[3]] <- osab_maps[[3]] + ggtitle("(c)")
+osab_maps[[4]] <- osab_maps[[4]] + ggtitle("(d)")
+osab_maps[[5]] <- osab_maps[[5]] + ggtitle("(e)")
+# make a blank ggplot object to fill space
+blank_plot <- ggplot() + theme_bw()
 # print plots using patchwork
-osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]]
+osab_maps[[1]]+osab_maps[[2]]+osab_maps[[3]] + blank_plot + 
+  osab_maps[[4]] + osab_maps[[5]]
 ### end plot standardized predictions -----------------------------------------
 
 
@@ -376,14 +512,17 @@ n_detections_per_species_1km
 ggsave("Fig1.jpg", map_Osab_raw + map_Osab_spat_subsamp, 
        width = 20, height = 20/2, units = "cm", 
        device = "jpg")
-ggsave("Fig2.jpg", auc_all_models_plot, width = 20, height = 20, units = "cm", 
+ggsave("Fig2.jpg", auc_means_plot, width = 20, height = 20, units = "cm", 
        device = "jpg")
-ggsave("Fig3.jpg", performance_best_mod_plot, width = 20, height = 20, 
+ggsave("Fig3.jpg", auc_all_models_plot, width = 20, height = 20, units = "cm",
+       device = "jpg")
+ggsave("Fig4.jpg", performance_best_mod_plot, width = 20, height = 20, 
        units = "cm", device = "jpg")
-ggsave("Fig4.jpg", pd_plots[["Ommatoiulus sabulosus"]] + ggtitle(""), 
+ggsave("Fig5.jpg", pd_plots[["Ommatoiulus sabulosus"]] + ggtitle(""), 
        width = 20, height = 20, units = "cm", device = "jpg")
-ggsave("Fig5.jpg", osab_maps[[1]] + osab_maps[[2]] + osab_maps[[3]], 
-       width = 20, height = 20/3, units = "cm", device = "jpg")
+ggsave("Fig6.jpg", osab_maps[[1]]+osab_maps[[2]]+osab_maps[[3]] + blank_plot +
+         osab_maps[[4]] + osab_maps[[5]], 
+       width = 20, height = 20*0.667, units = "cm", device = "jpg")
 
 
 ## save as eps
