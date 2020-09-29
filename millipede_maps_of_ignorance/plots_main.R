@@ -12,7 +12,6 @@
 ## last modified: 29 Sep 2020
 ##############################
 library(patchwork)
-library(boot)
 try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
        mill_spat))
 t_size <- 20
@@ -349,63 +348,29 @@ rm(pd, vimp)
 osab_preds <- list(raw = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_noSubSamp_Ommatoiulus_sabulosus1000.rds"), 
                    spat_subsamp = readRDS("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_Ommatoiulus_sabulosus1000.rds"))
 
-# # define function to get 95% bootstrap CI of prediction mean
-# ci_width <- function(x) {
-#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
-#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
-#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
-#   # calculate width of bca CI
-#   width <- tryCatch(ci$bca[5] - ci$bca[4], error = function(x) NA) 
-#   width
-# }
-# ci_low <- function(x) {
-#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
-#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
-#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
-#   tryCatch(ci$bca[4], error = function(x) NA) # CI lower bound
-# }
-# ci_high <- function(x) {
-#   bt <- tryCatch({boot(x, statistic = function(xdat, ind) {
-#     mean(xdat[ind], na.rm = T)}, R = 99)}, error = function(x) NA)
-#   ci <- tryCatch(boot.ci(bt), error = function(x) NA)
-#   tryCatch(ci$bca[5], error = function(x) NA) # CI upper bound
-# }
+# define function to calculate standard error of mean
 se <- function(x) sd(x)/sqrt(length(x))
 
-if(bootstrap_mean_prediction) {
-## calculate mean predictions, 95% CI, and width of CI for predictions in each 
-# grid cell
-  osab_ciWidth_data <- lapply(osab_preds, function(dat) {
-    # get only width of 95% CI for predictions from random CV
-    dat <- dat[dat$cv == "random", ] # use only random CV results
-    sp <- "Ommatoiulus sabulosus"
-    mod <- "env_spat_ll_rf"
-    
-    # get 95% CI for mean prediction for each grid cell 
-    # (averaging over all folds)
-    # dat <- group_by(dat, en) %>%
-    #   summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-    #             ci_l = ci_low(mean_pred), 
-    #             ci_h = ci_high(mean_pred),
-    #             ci_width = ci_width(mean_pred), 
-    #             eastings = mean(eastings), northings = mean(northings))
-    
-    dat <- group_by(dat, en) %>%
-      summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-                se = se(mean_pred), 
-                eastings = mean(eastings), northings = mean(northings))
-    dat
-  })
-  # save bootstrap results
-  saveRDS(osab_ciWidth_data, file = "./saved_objects/mean_prediction_and_CIs_Ommatoiulus_sabulosus.rds")
-} else (osab_ciWidth_data <- readRDS("./saved_objects/mean_prediction_and_CIs_Ommatoiulus_sabulosus.rds"))
+## calculate mean predictions and se of mean in each grid cell
+osab_ciWidth_data <- lapply(osab_preds, function(dat) {
+  # get only width of 95% CI for predictions from random CV
+  dat <- dat[dat$cv == "random", ] # use only random CV results
+  sp <- "Ommatoiulus sabulosus"
+  mod <- "env_spat_ll_rf"
+
+  dat <- group_by(dat, en) %>%
+    summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+              se = se(mean_pred), 
+              eastings = mean(eastings), northings = mean(northings))
+  dat
+})
 
 osab_maps_ciWidth <- lapply(osab_ciWidth_data, function(dat, annot, ir_TM75) {
   # map width of 95% CI
   ggplot() +
     geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
     geom_tile(data = dat,
-              aes(x = eastings, y = northings, fill = ci_width)) +
+              aes(x = eastings, y = northings, fill = se)) +
     ylab("") + xlab("Longitude") +
     scale_fill_gradient(low = "white", high = "red") +  
     guides(fill = guide_colorbar(title = "",

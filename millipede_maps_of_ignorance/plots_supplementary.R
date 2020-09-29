@@ -5,7 +5,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 2 July 2020
+## last modified: 29 Sep 2020
 ##############################
 t_size <- 20
 
@@ -435,29 +435,22 @@ for(i in 1:length(sp_to_fit)) {
       paste0("./saved_objects/standard_predictions_env_spat_ll_rf_SubSamp_", 
              gsub(" ", "_", sn), "1000.rds")))
   
-  if(bootstrap_mean_prediction) {
-    sp_ci_dat <- lapply(sp_preds, function(dat) {
-      # map only predictions from random CV
-      dat <- dat[dat$cv == "random", ] # use only random CV results
-      imod <- "env_spat_ll_rf"
-      
-      # get average predictions for each grid cell (averaging over all folds)
-      dat <- group_by(dat, en) %>%
-        summarise(mean_prediction = mean(mean_pred, na.rm = T), 
-                  ci_l = ci_low(mean_pred), 
-                  ci_h = ci_high(mean_pred),
-                  ci_width = ci_width(mean_pred), 
-                  eastings = mean(eastings), northings = mean(northings))
-      dat
-    })
-    # save bootstrap results
-    saveRDS(sp_ci_dat, file = paste0("./mean_prediction_and_CIs_", 
-                                     gsub(" ", "_", sn), ".rds"))
-  } else (sp_ci_dat <- readRDS(paste0("./mean_prediction_and_CIs_", 
-                                      gsub(" ", "_", sn), ".rds")))
+  sp_se_dat <- lapply(sp_preds, function(dat) {
+    # map only predictions from random CV
+    dat <- dat[dat$cv == "random", ] # use only random CV results
+    imod <- "env_spat_ll_rf"
+    
+    # get average predictions for each grid cell (averaging over all folds)
+    dat <- group_by(dat, en) %>%
+      summarise(mean_prediction = mean(mean_pred, na.rm = T), 
+                se = se(mean_pred), 
+                eastings = mean(eastings), northings = mean(northings))
+    dat
+  })
+
   
   maps_prediction <- lapply(
-    sp_ci_dat, function(dat, annot, ir_TM75) {
+    sp_se_dat, function(dat, annot, ir_TM75) {
       # map mean predictions
       ggplot() + 
         geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
@@ -473,12 +466,12 @@ for(i in 1:length(sp_to_fit)) {
               plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
     }, annot = annot, ir_TM75 = ir_TM75)
   
-  maps_ciWidth <- lapply(sp_ci_dat, function(dat, annot, ir_TM75) {
+  maps_ciWidth <- lapply(sp_se_dat, function(dat, annot, ir_TM75) {
     # map width of 95% CI
     ggplot() +
       geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
       geom_tile(data = dat,
-                aes(x = eastings, y = northings, fill = ci_width)) +
+                aes(x = eastings, y = northings, fill = se)) +
       ylab("") + xlab("Longitude") +
       scale_fill_gradient(low = "white", high = "red") +  
       guides(fill = guide_colorbar(title = "",
@@ -618,19 +611,24 @@ ggsave("FigSPD6.jpg", pd_raw_plots[["Cylindroiulus punctatus"]] +
 ggsave("FigSP1.jpg", sp_map_list[[1]][[1]] + sp_map_list[[1]][[2]] + 
          sp_map_list[[1]][[3]] + 
          blank_plot + sp_map_list[[1]][[4]] + sp_map_list[[1]][[5]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
 ggsave("FigSP2.jpg", sp_map_list[[2]][[1]] + sp_map_list[[2]][[2]] + 
          sp_map_list[[2]][[3]] + 
          blank_plot + sp_map_list[[2]][[4]] + sp_map_list[[2]][[5]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
 ggsave("FigSP3.jpg", sp_map_list[[3]][[1]] + sp_map_list[[3]][[2]] + 
          sp_map_list[[3]][[3]] + 
          blank_plot + sp_map_list[[3]][[4]] + sp_map_list[[3]][[5]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
-# TODO 29 Sep.  If above works, change remainings saves to nested list
-ggsave("FigSP4.jpg", sp_map_list[[10]] + sp_map_list[[11]] + sp_map_list[[12]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
-ggsave("FigSP5.jpg", sp_map_list[[13]] + sp_map_list[[14]] + sp_map_list[[15]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
-ggsave("FigSP6.jpg", sp_map_list[[16]] + sp_map_list[[17]] + sp_map_list[[18]], 
-       width = 25, height = 25/3, units = "cm", device = "jpg")
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+ggsave("FigSP4.jpg", sp_map_list[[4]][[1]] + sp_map_list[[4]][[2]] + 
+         sp_map_list[[4]][[3]] + 
+         blank_plot + sp_map_list[[4]][[4]] + sp_map_list[[4]][[5]], 
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+ggsave("FigSP5.jpg", sp_map_list[[5]][[1]] + sp_map_list[[5]][[2]] + 
+         sp_map_list[[5]][[3]] + 
+         blank_plot + sp_map_list[[5]][[4]] + sp_map_list[[5]][[5]], 
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+ggsave("FigSP6.jpg", sp_map_list[[6]][[1]] + sp_map_list[[6]][[2]] + 
+         sp_map_list[[6]][[3]] + 
+         blank_plot + sp_map_list[[6]][[4]] + sp_map_list[[6]][[5]], 
+       width = 25, height = 25*0.667, units = "cm", device = "jpg")
