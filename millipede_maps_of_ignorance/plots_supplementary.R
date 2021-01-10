@@ -5,7 +5,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 10 June 2020
-## last modified: 29 Sep 2020
+## last modified: 9 Dec 2020
 ##############################
 t_size <- 20
 
@@ -35,6 +35,19 @@ pred_cor_plot <- ggpairs(
                    "artificial\nsurfaces", "arable\nland", 
                    "wetlands", "forest\nand\nsemi-\nnatural", "pasture"))
 ## end predictor variable correlations --------------------------------------
+plot_preds <- mask(pred_brick_1k, ir_TM75) # copy predictor variables
+# select only predictors I used in models
+plot_preds <- subset(plot_preds, c("mean_tn", "mean_rr", "elev", 
+                                   "artificial_surfaces", "arable_l2", 
+                                   "wetlands_l1", 
+                                   "forest_seminatural_l1", "pasture_l2"))
+# rename layers for readability
+names(plot_preds) <- c("minimum\ntemperature", "precipitation", "elevation", 
+                       "artificial\nsurfaces", "arable land", "wetlands", 
+                       "forest seminatural", "pasture")
+## predictor variable maps --------------------------------------------------
+
+## end predictor variable maps ------------------------------------------------
 
 ## checklist length plots -----------------------------------------------------
 hist(mill_wide$list_length, breaks = 15)
@@ -371,7 +384,7 @@ pd_raw_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
     geom_line() +
     facet_wrap(~variable, scales = "free_x") +
     ylab("Partial dependence") +
-    xlab("Variable value") +
+    xlab("") +
     ggtitle(pdat$species[1]) + 
     theme_bw() + 
     theme(text = element_text(size = t_size), 
@@ -424,6 +437,7 @@ names(stpred) <- gsub(".rds", "", names(stpred))
 
 ## using code from main text
 sp_map_list <- list()
+pred_se_cor_plots <- list()
 for(i in 1:length(sp_to_fit)) {
   sn <- sp_to_fit[[i]]
   # load standardized predictions
@@ -448,6 +462,20 @@ for(i in 1:length(sp_to_fit)) {
     dat
   })
 
+  # plot correlation of predction and se
+  sp_se_dat$raw$training_data <- "raw"
+  sp_se_dat$spat_subsamp$training_data <- "spat_subsamp"
+  cor_dat <- bind_rows(sp_se_dat)
+  pred_se_cor_plots[[length(pred_se_cor_plots) + 1]] <- ggplot(
+    data = cor_dat, aes(x = mean_prediction, y = se)) + 
+    geom_point() + 
+    facet_wrap(~factor(training_data, levels = c("raw", "spat_subsamp"), 
+                       labels = c("raw", "spatially\nundersampled"))) + 
+    xlab("Mean prediction") + ylab("Standard error") + 
+    ggtitle(sn) + 
+    theme_bw() + 
+    theme(text = element_text(size = 0.55*t_size))
+  rm(cor_dat)
   
   maps_prediction <- lapply(
     sp_se_dat, function(dat, annot, ir_TM75) {
@@ -461,13 +489,13 @@ for(i in 1:length(sp_to_fit)) {
                                      barwidth = unit(0.4 * t_size, 
                                                      "points"))) +
         theme_bw() + 
-        theme(text = element_text(size = 0.5*t_size), 
+        theme(text = element_text(size = 0.55*t_size), 
               axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
-              plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+              plot.margin = unit(c(-0.25, -0.4, 0, -0.5), "lines"))
     }, annot = annot, ir_TM75 = ir_TM75)
   
   maps_ciWidth <- lapply(sp_se_dat, function(dat, annot, ir_TM75) {
-    # map width of 95% CI
+    # map se of mean prediction
     ggplot() +
       geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
       geom_tile(data = dat,
@@ -477,9 +505,9 @@ for(i in 1:length(sp_to_fit)) {
       guides(fill = guide_colorbar(title = "",
                                    barwidth = unit(0.4 * t_size, "points"))) +
       theme_bw() +
-      theme(text = element_text(size = 0.5*t_size),
+      theme(text = element_text(size = 0.55*t_size),
             axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1),
-            plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+            plot.margin = unit(c(0, -0.6, -0.25, -0.5), "lines"))
   }, annot = annot, ir_TM75 = ir_TM75)
   
   ## add raw observations for this sp
@@ -490,19 +518,20 @@ for(i in 1:length(sp_to_fit)) {
     geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
     geom_sf(
       data = st_as_sf(mill_wide[sobs == 0, ]), 
-      color = "light grey", size = 0.02*t_size) + 
+      color = "dark grey", size = 0.02*t_size) + 
     geom_sf(data = st_as_sf(mill_wide[sobs > 0, ]), 
             color = "dark orange", size = 0.02*t_size) + 
     geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
-    geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+    geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label), 
+              size = 0.12*t_size) + 
     geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
                  arrow = arrow(length = unit(0.1, "npc"))) + 
     ylab("Latitude") + xlab("Longitude") + 
     ggtitle("(a)", subtitle = gsub(" ", "\n", sn)) +
     theme_bw() + 
-    theme(text = element_text(size = 0.5*t_size), 
+    theme(text = element_text(size = 0.55*t_size), 
           axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
-          plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
+          plot.margin = unit(c(-0.25, -0.4, -0.5, -0.5), "lines"))
   
   # combine maps in one ordered list
   sp_maps <- list(observed = map_observed, 
@@ -511,11 +540,12 @@ for(i in 1:length(sp_to_fit)) {
                   raw_ciWidth = maps_ciWidth$raw, 
                   spat_subsamp_ciWidth = maps_ciWidth$spat_subsamp)
   # add titles
-  sp_maps[[1]] <- sp_maps[[1]] + ggtitle("(a)")
+  sp_maps[[1]] <- sp_maps[[1]] + ggtitle("(a)") + ylab("Latitude")
   sp_maps[[2]] <- sp_maps[[2]] + ggtitle("(b)")
   sp_maps[[3]] <- sp_maps[[3]] + ggtitle("(c)")
-  sp_maps[[4]] <- sp_maps[[4]] + ggtitle("(d)")
-  sp_maps[[5]] <- sp_maps[[5]] + ggtitle("(e)")
+  sp_maps[[4]] <- sp_maps[[4]] + ggtitle("(d)") + 
+    ylab("Latitude") + xlab("Longitude")
+  sp_maps[[5]] <- sp_maps[[5]] + ggtitle("(e)") + xlab("Longitude")
   
   # put maps for this species into sp_map_list
   sp_map_list[[length(sp_map_list) + 1]] <- sp_maps
@@ -557,78 +587,150 @@ doy_plot
 rm(doy1, smod)
 ### end plot DOY demonstration ------------------------------------------------
 
+### re-make atlas map for B. tenuis -------------------------------------------
+bten_data <- mill_wide[mill_wide$`Boreoiulus tenuis` > 0, ]
+
+# make hec_names spatial 
+hec_names_spat <- SpatialPointsDataFrame(
+  coords = hec_names[, c("eastings", "northings")], 
+  data = hec_names, proj4string = CRS("+init=epsg:29903"))
+# make sure millipede data is in same projection as predictor data
+hec_names_spat <- spTransform(hec_names_spat, 
+                              raster::projection(pred_brick))
+
+## indicate B. tenuis presence record
+hec_names_spat$B_tenuis <- NA
+hec_names_spat$B_tenuis[hec_names_spat$hectad %in% mill_wide$hectad] <- 0
+hec_names_spat$B_tenuis[hec_names_spat$hectad %in% bten_data$hectad] <- 1
+
+Bten_atlas_map <- ggplot() + 
+  geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
+  geom_sf(data = st_as_sf(hec_names_spat[!is.na(hec_names_spat$B_tenuis) & 
+                                           hec_names_spat$B_tenuis == 0, ]), 
+          color = "grey", size = 0.04*t_size) +
+  geom_sf(data = st_as_sf(hec_names_spat[!is.na(hec_names_spat$B_tenuis) & 
+                                           hec_names_spat$B_tenuis == 1, ]), 
+          color = "black", size = 0.04*t_size) +
+  geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+  geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+  geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+               arrow = arrow(length = unit(0.1, "npc"))) + 
+  ylab("Latitude") + xlab("Longitude") + 
+  ggtitle("(a)") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1))
+Bten_atlas_map
+### end re-make atlas map ----------------------------------------------------
 
 
 #### save plots to files -------------------------------------------------------
-ggsave("FigS1.jpg", pred_cor_plot, width = 20, height = 20, 
-       units = "cm", device = "jpg")
-ggsave("FigS2.jpg", class_balance_boxplot, width = 25, height = 25, 
-       units = "cm", device = "jpg")
-ggsave("FigS3.jpg", spat_evenness_boxplot, width = 25, height = 20, 
-       units = "cm", device = "jpg")
-ggsave("FigS4.jpg", multiplot(plotlist = vimp_plots_best, cols = 2), 
-       width = 25, height = 25, units = "cm", device = "jpg")
+ggsave("FigS1.jpg", class_balance_boxplot + 
+         theme(text = element_text(size = t_size*0.6)), 
+       width = 16, height = 16, units = "cm", device = "jpg")
+ggsave("FigS2.jpg", spat_evenness_boxplot + 
+         theme(text = element_text(size = t_size*0.6)), 
+       width = 16, height = 16, units = "cm", device = "jpg")
+ggsave("FigS3.jpg", plot(plot_preds), 
+       width = 15, height = 15, units = "cm", device = "jpg")
+ggsave("FigS4.jpg", doy_plot + 
+         theme(text = element_text(size = t_size)), 
+       width = 15, height = 15, units = "cm", device = "jpg")
+ggsave("FigS5.jpg", multiplot(plotlist = vimp_plots_best[1:3], cols = 1), 
+       width = 15, height = 20, units = "cm", device = "jpg")
+ggsave("FigS6.jpg", multiplot(plotlist = vimp_plots_best[4:6], cols = 1), 
+       width = 15, height = 22, units = "cm", device = "jpg")
 
 
-ggsave("FigS100.jpg", list_length_map, width = 20, height = 20, 
+ggsave("FigS18.jpg", pred_se_cor_plots[[1]] + pred_se_cor_plots[[2]] + 
+         pred_se_cor_plots[[3]] + pred_se_cor_plots[[4]] + 
+         pred_se_cor_plots[[5]] + pred_se_cor_plots[[6]] + 
+         plot_layout(ncol = 2), 
+       width = 16, height = 16, units = "cm", device = "jpg")
+ggsave("FigS19.jpg", pred_cor_plot, width = 20, height = 20, 
        units = "cm", device = "jpg")
-ggsave("FigS101.jpg", doy_plot, width = 20, height = 20, 
+ggsave("FigS20.jpg", list_length_map, width = 17, height = 15, 
        units = "cm", device = "jpg")
+
 
 
 
 ggsave("FigSPD1.jpg", pd_raw_plots[["Macrosternodesmus palicola"]] + 
        pd_plots[["Macrosternodesmus palicola"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.7*t_size)), 
+       width = 20, height = 14, units = "cm", device = "jpg")
 ggsave("FigSPD2.jpg", pd_raw_plots[["Boreoiulus tenuis"]] + 
          pd_plots[["Boreoiulus tenuis"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.7*t_size)), 
+       width = 20, height = 14, units = "cm", device = "jpg")
 ggsave("FigSPD3.jpg", pd_raw_plots[["Ommatoiulus sabulosus"]] + 
          pd_plots[["Ommatoiulus sabulosus"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.7*t_size)), 
+       width = 20, height = 14, units = "cm", device = "jpg")
 ggsave("FigSPD4.jpg", pd_raw_plots[["Blaniulus guttulatus"]] + 
          pd_plots[["Blaniulus guttulatus"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.6*t_size), 
+               axis.text.x = element_text(angle = 45, 
+                                          hjust = 1, vjust = 1)), 
+       width = 20, height = 18, units = "cm", device = "jpg")
 ggsave("FigSPD5.jpg", pd_raw_plots[["Glomeris marginata"]] + 
          pd_plots[["Glomeris marginata"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.6*t_size), 
+               axis.text.x = element_text(angle = 45, 
+                                          hjust = 1, vjust = 1)), 
+       width = 20, height = 18, units = "cm", device = "jpg")
 ggsave("FigSPD6.jpg", pd_raw_plots[["Cylindroiulus punctatus"]] + 
          pd_plots[["Cylindroiulus punctatus"]] + 
          plot_annotation(tag_levels = "a") & 
-         theme(text = element_text(size = 0.8*t_size)), 
-       width = 28, height = 20, units = "cm", device = "jpg")
+         theme(text = element_text(size = 0.6*t_size), 
+               axis.text.x = element_text(angle = 45, 
+                                          hjust = 1, vjust = 1)), 
+       width = 20, height = 18, units = "cm", device = "jpg")
 
 ggsave("FigSP1.jpg", sp_map_list[[1]][[1]] + sp_map_list[[1]][[2]] + 
          sp_map_list[[1]][[3]] + 
-         blank_plot + sp_map_list[[1]][[4]] + sp_map_list[[1]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[1]][[4]] + sp_map_list[[1]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
 ggsave("FigSP2.jpg", sp_map_list[[2]][[1]] + sp_map_list[[2]][[2]] + 
          sp_map_list[[2]][[3]] + 
-         blank_plot + sp_map_list[[2]][[4]] + sp_map_list[[2]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[2]][[4]] + sp_map_list[[2]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
 ggsave("FigSP3.jpg", sp_map_list[[3]][[1]] + sp_map_list[[3]][[2]] + 
          sp_map_list[[3]][[3]] + 
-         blank_plot + sp_map_list[[3]][[4]] + sp_map_list[[3]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[3]][[4]] + sp_map_list[[3]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
 ggsave("FigSP4.jpg", sp_map_list[[4]][[1]] + sp_map_list[[4]][[2]] + 
          sp_map_list[[4]][[3]] + 
-         blank_plot + sp_map_list[[4]][[4]] + sp_map_list[[4]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[4]][[4]] + sp_map_list[[4]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
 ggsave("FigSP5.jpg", sp_map_list[[5]][[1]] + sp_map_list[[5]][[2]] + 
          sp_map_list[[5]][[3]] + 
-         blank_plot + sp_map_list[[5]][[4]] + sp_map_list[[5]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[5]][[4]] + sp_map_list[[5]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
 ggsave("FigSP6.jpg", sp_map_list[[6]][[1]] + sp_map_list[[6]][[2]] + 
          sp_map_list[[6]][[3]] + 
-         blank_plot + sp_map_list[[6]][[4]] + sp_map_list[[6]][[5]], 
-       width = 25, height = 25*0.667, units = "cm", device = "jpg")
+         plot_spacer() + sp_map_list[[6]][[4]] + sp_map_list[[6]][[5]], 
+       width = 20, height = 20*0.6, units = "cm", device = "jpg")
+
+ggsave("Fig_Btenuis_atlasSDM.jpg", Bten_atlas_map +
+         (sp_map_list[[2]][[3]] + ggtitle("(b)")) + plot_spacer() + 
+         (sp_map_list[[2]][[5]] + ggtitle("(c)")), 
+       width = 14, height = 14, units = "cm", device = "jpg")
+
+# ggsave("FigSP7.jpg", pred_se_cor_plots[[1]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+# ggsave("FigSP8.jpg", pred_se_cor_plots[[2]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+# ggsave("FigSP9.jpg", pred_se_cor_plots[[3]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+# ggsave("FigSP10.jpg", pred_se_cor_plots[[4]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+# ggsave("FigSP11.jpg", pred_se_cor_plots[[5]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+# ggsave("FigSP12.jpg", pred_se_cor_plots[[6]], 
+#        width = 15, height = 10, units = "cm", device = "jpg")
+

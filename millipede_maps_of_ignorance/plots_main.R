@@ -9,7 +9,7 @@
 ##
 ## author: Willson Gaul willson.gaul@ucdconnect.ie
 ## created: 13 May 2020
-## last modified: 29 Sep 2020
+## last modified: 8 Dec 2020
 ##############################
 library(patchwork)
 try(rm(block_subsamp, fold_assignments, hec_names_spat, mill_fewer_vars, 
@@ -76,7 +76,7 @@ ex_osab <- SpatialPointsDataFrame(
 map_Osab_raw <- ggplot() + 
   geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
   geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 0, ]), 
-          color = "light grey", size = 0.04*t_size) + 
+          color = "dark grey", size = 0.04*t_size) + 
   geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 1, ]), 
           color = "dark orange", size = 0.04*t_size) + 
   geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
@@ -92,7 +92,7 @@ map_Osab_raw <- ggplot() +
 map_Osab_spat_subsamp <- ggplot() + 
   geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
   geom_sf(data = st_as_sf(ex_osab[ex_osab$`Ommatoiulus.sabulosus` == 0, ]), 
-          color = "light grey", size = 0.04*t_size) + 
+          color = "dark grey", size = 0.04*t_size) + 
   geom_sf(data = st_as_sf(ex_osab[ex_osab$`Ommatoiulus.sabulosus` == 1, ]), 
           color = "dark orange", size = 0.04*t_size) + 
   xlab("Longitude") + ggtitle("(b)") + 
@@ -184,7 +184,7 @@ auc_means_plot <- ggplot(
                  "\ncoordinates +\nseason +\nlist length\n",
                  "\nenvironment +\nseason +\nlist length\n", 
                  "\nenvironment + \ncoordinates +\nseason +\nlist length")))) + 
-  geom_point(size = t_size/7) + 
+  geom_point(size = t_size/4) + 
   # facet_wrap(~factor(species, 
   #                    levels = c("Macrosternodesmus palicola", 
   #                               "Boreoiulus tenuis", 
@@ -327,7 +327,7 @@ pd_plots <- lapply(sp_to_fit, FUN = function(x, dat, vimp) {
     geom_line() +
     facet_wrap(~variable, scales = "free_x") +
     ylab("Partial dependence") + 
-    xlab("Variable value") + 
+    xlab("") + 
     ggtitle(pdat$species[1]) + 
     theme_bw() + 
     theme(text = element_text(size = t_size), 
@@ -366,19 +366,19 @@ osab_ciWidth_data <- lapply(osab_preds, function(dat) {
 })
 
 osab_maps_ciWidth <- lapply(osab_ciWidth_data, function(dat, annot, ir_TM75) {
-  # map width of 95% CI
+  # map standard error of mean
   ggplot() +
     geom_sf(data = st_as_sf(ir_TM75), fill = NA) +
     geom_tile(data = dat,
               aes(x = eastings, y = northings, fill = se)) +
-    ylab("") + xlab("Longitude") +
+    ylab("") + xlab("") +
     scale_fill_gradient(low = "white", high = "red") +  
     guides(fill = guide_colorbar(title = "",
                                  barwidth = unit(0.4 * t_size, "points"))) +
     theme_bw() +
-    theme(text = element_text(size = 0.5*t_size),
+    theme(text = element_text(size = 0.55*t_size),
           axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1),
-          plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+          plot.margin = unit(c(-0.25, -0.6, -0.25, -0.5), "lines"))
 }, annot = annot, ir_TM75 = ir_TM75)
 
 osab_maps_prediction <- lapply(
@@ -388,31 +388,32 @@ osab_maps_prediction <- lapply(
       geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
       geom_tile(data = dat, 
                 aes(x = eastings, y = northings, fill = mean_prediction)) +
-      ylab("") + xlab("Longitude") + 
+      ylab("") + xlab("") + 
       guides(fill = guide_colorbar(title = "", 
                                    barwidth = unit(0.4 * t_size, "points"))) +
       theme_bw() + 
-      theme(text = element_text(size = 0.5*t_size), 
+      theme(text = element_text(size = 0.55*t_size), 
           axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
-          plot.margin = unit(c(-0.25, -0.1, -0.25, 0), "lines"))
+          plot.margin = unit(c(-0.25, -0.4, -0.25, -0.5), "lines"))
 }, annot = annot, ir_TM75 = ir_TM75)
 
 # map observed checklists
 osab_map_observed <- ggplot() + 
   geom_sf(data = st_as_sf(ir_TM75), fill = NA) + 
   geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 0, ]), 
-          color = "light grey", size = 0.02*t_size) + 
+          color = "dark grey", size = 0.02*t_size) + 
   geom_sf(data = st_as_sf(mill_wide[mill_wide$`Ommatoiulus sabulosus` == 1, ]), 
           color = "dark orange", size = 0.02*t_size) + 
   geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
-  geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label)) + 
+  geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label), 
+            size = 0.12*t_size) + 
   geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
                arrow = arrow(length = unit(0.1, "npc"))) + 
-  ylab("Latitude") + xlab("Longitude") + 
+  ylab("") + xlab("") +
   theme_bw() + 
-  theme(text = element_text(size = 0.5*t_size), 
+  theme(text = element_text(size = 0.55*t_size), 
         axis.text.x = element_text(angle = 35, hjust = 1, vjust = 1), 
-        plot.margin = unit(c(-0.25, 0, -0.25, -0.5), "lines"))
+        plot.margin = unit(c(-0.25, -0.4, -0.5, -0.5), "lines"))
 
 # combine maps in one ordered list
 osab_maps <- list(observed = osab_map_observed, 
@@ -422,20 +423,20 @@ osab_maps <- list(observed = osab_map_observed,
                   spat_subsamp_ciWidth = osab_maps_ciWidth$spat_subsamp)
 
 # add titles
-osab_maps[[1]] <- osab_maps[[1]] + ggtitle("(a)")
+osab_maps[[1]] <- osab_maps[[1]] + ggtitle("(a)") + ylab("Latitude") 
 osab_maps[[2]] <- osab_maps[[2]] + ggtitle("(b)")
 osab_maps[[3]] <- osab_maps[[3]] + ggtitle("(c)")
-osab_maps[[4]] <- osab_maps[[4]] + ggtitle("(d)")
-osab_maps[[5]] <- osab_maps[[5]] + ggtitle("(e)")
-# make a blank ggplot object to fill space
-blank_plot <- ggplot() + theme_bw()
+osab_maps[[4]] <- osab_maps[[4]] + ggtitle("(d)") + 
+  ylab("Latitude") + xlab("Longitude")
+osab_maps[[5]] <- osab_maps[[5]] + ggtitle("(e)") + xlab("Longitude")
+
 # print plots using patchwork
-osab_maps[[1]]+osab_maps[[2]]+osab_maps[[3]] + blank_plot + 
-  osab_maps[[4]] + osab_maps[[5]]
+osab_maps[[1]]+ osab_maps[[2]] + osab_maps[[3]] + plot_spacer() + 
+  osab_maps[[4]] + osab_maps[[5]] + plot_layout(ncol = 3)
 ### end plot standardized predictions -----------------------------------------
 
 
-### print tables and numbers for text ------------------------------------------
+### print tables and numbers for text -----------------------------------------
 # Number of repeat visits to grid cells (though there could be multiple 
 # locations visited within a grid cell, so these are not necessarily true 
 # repeat visits)
@@ -470,9 +471,23 @@ n_detections_per_species_1km$proportion_detections <- round(
   digits = 3)
 n_detections_per_species_1km
 
+# some AUC summary stats
+auc_summary[auc_summary$model == "day_ll_rf", 1:4]
+auc_summary[auc_summary$model == "env_spat_ll_rf", 1:4]
+summary(auc_summary$spat_subsamp[auc_summary$model == "day_ll_rf"])
+summary(auc_summary$spat_subsamp[auc_summary$model == "env_spat_ll_rf"])
+
+# difference between simplest and most complex model for each sp
+summary(auc_summary$spat_subsamp[auc_summary$model == "day_ll_rf"] - 
+  auc_summary$spat_subsamp[auc_summary$model == "env_spat_ll_rf"])
+
+auc_summary[auc_summary$species == "Cylindroiulus punctatus", 1:4]
+
+data.frame(group_by(auc_summary, species) %>%
+  arrange(spat_subsamp, .by_group = TRUE))
 ### end print tables and numbers for text  ------------------------------------
 
-### save plots -----------------------------------------------------------------
+### save plots ----------------------------------------------------------------
 ## save as jpg
 ggsave("Fig1.jpg", map_Osab_raw + map_Osab_spat_subsamp, 
        width = 20, height = 20/2, units = "cm", 
@@ -485,9 +500,21 @@ ggsave("Fig4.jpg", performance_best_mod_plot, width = 20, height = 20,
        units = "cm", device = "jpg")
 ggsave("Fig5.jpg", pd_plots[["Ommatoiulus sabulosus"]] + ggtitle(""), 
        width = 20, height = 20, units = "cm", device = "jpg")
-ggsave("Fig6.jpg", osab_maps[[1]]+osab_maps[[2]]+osab_maps[[3]] + blank_plot +
-         osab_maps[[4]] + osab_maps[[5]], 
-       width = 20, height = 20*0.667, units = "cm", device = "jpg")
+ggsave("Fig6.jpg", osab_maps[[2]] + ylab("Latitude") + ggtitle("(a)") + 
+         geom_segment(data = annot[1, ], aes(x = x1, xend = x2, y = y1, yend = y2)) + 
+         geom_text(data = annot[c(2, 4), ], aes(x = x1, y = y1, label = label), 
+                   size = 0.2*t_size) + 
+         geom_segment(data = annot[3, ], aes(x = x1, xend = x2, y = y1, yend = y2), 
+                      arrow = arrow(length = unit(0.1, "npc"))) + 
+         theme(text = element_text(size = 0.8*t_size)) +
+         osab_maps[[3]] + ggtitle("(b)") +  
+         theme(text = element_text(size = 0.8*t_size)) +
+         osab_maps[[4]] + ggtitle("(c)") + 
+         theme(text = element_text(size = 0.8*t_size)) +
+         osab_maps[[5]] + ggtitle("(d)") + 
+         theme(text = element_text(size = 0.8*t_size)) + 
+         plot_layout(ncol = 2), 
+       width = 18, height = 18, units = "cm", device = "jpg")
 
 
 ## save as eps
